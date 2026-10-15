@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Band Lab · semiconductor band diagrams</title>
+  <meta name="description" content="Interactive energy band diagrams for doped semiconductors and pn junctions: Fermi level, built-in voltage, depletion region, electric field, drift and diffusion.">
+  <meta name="theme-color" content="#060912">
+  <link rel="preload" href="fonts/schibsted-grotesk-latin-500-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="fonts/stix-two-text-latin-400-italic.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23060912'/%3E%3Cpath d='M4 9h8c4 0 4 8 8 8h8' stroke='%23f3f6ff' stroke-width='2.2' fill='none' stroke-linecap='round'/%3E%3Cpath d='M4 17h8c4 0 4 8 8 8h8' stroke='%23f3f6ff' stroke-width='2.2' fill='none' stroke-linecap='round'/%3E%3Cpath d='M4 14h24' stroke='%23ffc857' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="./" aria-label="Band Lab home">
+      <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true">
+        <path d="M3 9h8c4 0 4 8 8 8h10" class="bm-band"/>
+        <path d="M3 17h8c4 0 4 8 8 8h10" class="bm-band"/>
+        <path d="M3 14h26" class="bm-ef"/>
+      </svg>
+      <span class="brand-text">
+        <span class="brand-name">Band Lab</span>
+        <span class="brand-tag">Semiconductor energy bands</span>
+      </span>
+    </a>
+
+    <div class="material-picker" role="radiogroup" aria-label="Semiconductor material" id="materials"></div>
+
+    <div class="mat-card" id="mat-card" role="tooltip" hidden></div>
+
+    <div class="segmented mode-switch" role="radiogroup" aria-label="Structure" id="mode">
+      <button type="button" role="radio" data-mode="bulk"><span class="lg">Single material</span><span class="sm">Single</span></button>
+      <button type="button" role="radio" data-mode="pn">pn junction</button>
+      <button type="button" role="radio" data-mode="rg"><span class="lg">R–G processes</span><span class="sm">R–G</span></button>
+    </div>
+  </header>
+
+  <main class="workspace" id="workspace">
+    <aside class="controls" aria-label="Doping, temperature and display">
+      <section class="group">
+        <h2>Doping</h2>
+        <div id="doping-bulk">
+        <div class="segmented small" role="radiogroup" aria-label="Doping type" id="bulk-type">
+          <button type="button" role="radio" data-type="n">n-type</button>
+          <button type="button" role="radio" data-type="i">Intrinsic</button>
+          <button type="button" role="radio" data-type="p">p-type</button>
+        </div>
+        <label class="range-field" id="bulk-n-field">
+          <span class="range-head"><span class="range-name" id="bulk-n-name"></span><output id="bulk-n-out"></output></span>
+          <input type="range" id="bulk-n" min="13" max="19" step="0.01">
+          <span class="range-scale"><span>10<sup>13</sup></span><span>10<sup>19</sup> cm<sup>−3</sup></span></span>
+        </label>
+        </div>
+
+        <div id="doping-pn">
+        <label class="range-field side-p">
+          <span class="range-head"><span class="range-name"><i class="mi">N</i><sub>A</sub> <span class="hint">p side</span></span><output id="na-out"></output></span>
+          <input type="range" id="na" min="13" max="19" step="0.01">
+        </label>
+        <label class="range-field side-n">
+          <span class="range-head"><span class="range-name"><i class="mi">N</i><sub>D</sub> <span class="hint">n side</span></span><output id="nd-out"></output></span>
+          <input type="range" id="nd" min="13" max="19" step="0.01">
+          <span class="range-scale"><span>10<sup>13</sup></span><span>10<sup>19</sup> cm<sup>−3</sup></span></span>
+        </label>
+        <div class="presets" aria-label="Doping presets">
+          <button type="button" data-preset="sym">Symmetric</button>
+          <button type="button" data-preset="p+n">p<sup>+</sup>n</button>
+          <button type="button" data-preset="n+p">n<sup>+</sup>p</button>
+        </div>
+        </div>
+      </section>
+
+      <section class="group" id="rg-controls" hidden>
+        <h2>Carriers</h2>
+        <label class="range-field">
+          <span class="range-head"><span class="range-name">State</span><output id="rg-u-out"></output></span>
+          <input type="range" id="rg-u" min="-1" max="1" step="0.01">
+          <span class="range-scale"><span>removed</span><span>equilibrium</span><span>injected</span></span>
+        </label>
+        <div class="presets rg-presets" aria-label="Carrier presets">
+          <button type="button" data-rgu="-1">Depletion region</button>
+          <button type="button" data-rgu="0">Equilibrium</button>
+          <button type="button" data-rgu="0.55">Light on</button>
+        </div>
+        <label class="range-field trap">
+          <span class="range-head"><span class="range-name"><i class="mi">E</i><sub>T</sub> − <i class="mi">E</i><sub>i</sub> <span class="hint">R–G center level</span></span><output id="rg-et-out"></output></span>
+          <input type="range" id="rg-et" min="-0.5" max="0.5" step="0.005">
+        </label>
+        <label class="range-field">
+          <span class="range-head"><span class="range-name"><i class="mi">τ</i><sub>n</sub> = <i class="mi">τ</i><sub>p</sub> <span class="hint">R–G center lifetime</span></span><output id="rg-tau-out"></output></span>
+          <input type="range" id="rg-tau" min="-10" max="-3" step="0.05">
+          <span class="range-scale"><span>0.1 ns</span><span>1 ms</span></span>
+        </label>
+      </section>
+
+      <section class="group">
+        <h2>Temperature</h2>
+        <label class="range-field">
+          <span class="range-head"><span class="range-name"><i class="mi">T</i></span><output id="t-out"></output></span>
+          <input type="range" id="temp" min="200" max="500" step="5">
+          <span class="range-scale"><span>200 K</span><span>500 K</span></span>
+        </label>
+      </section>
+
+      <section class="group">
+        <h2>Show</h2>
+        <div class="toggles">
+          <label class="switch"><input type="checkbox" data-show="carriers"><span class="track"></span>Carrier animation</label>
+          <label class="switch" id="toggle-flows"><input type="checkbox" data-show="flows"><span class="track"></span>Drift and diffusion arrows</label>
+          <label class="switch" id="toggle-quasi"><input type="checkbox" data-show="quasi"><span class="track"></span>Quasi-Fermi levels</label>
+          <label class="switch" id="toggle-field"><input type="checkbox" data-show="field"><span class="track"></span>Electric field</label>
+          <label class="switch" id="toggle-diffs"><input type="checkbox" data-show="diffs"><span class="track"></span>Energy differences</label>
+        </div>
+      </section>
+
+      <section class="group">
+        <h2 id="props-title">Material</h2>
+        <dl class="props" id="props"></dl>
+        <p class="props-note" id="props-note"></p>
+      </section>
+    </aside>
+
+    <section class="stage" aria-label="Band diagram">
+      <figure class="figure" id="figure">
+        <canvas id="diagram" role="img" aria-label="Energy band diagram"></canvas>
+        <div class="probe" id="probe" hidden></div>
+        <div class="rg-steps" id="rg-steps" hidden></div>
+        <figcaption class="legend" id="legend"></figcaption>
+      </figure>
+      <div class="readouts" id="readouts" aria-live="polite"></div>
+      <p class="notice" id="notice" hidden></p>
+      <section class="equations" id="equations" aria-label="Equations"></section>
+    </section>
+
+    <aside class="bias" aria-label="Applied voltage">
+      <div class="bias-ui" id="bias-ui">
+      <div class="bias-head">
+        <h2>Applied voltage</h2>
+        <div class="va-readout" id="va-readout"></div>
+        <p class="bias-state" id="bias-state"></p>
+      </div>
+      <div class="vslider" id="vslider">
+        <div class="vs-track">
+          <div class="vs-rail"></div>
+          <div class="vs-fill"></div>
+          <div class="vs-ticks"></div>
+          <div class="vs-thumb" aria-label="Applied voltage"></div>
+        </div>
+      </div>
+      <button type="button" class="ghost" id="va-zero">Return to 0 V</button>
+      <section class="iv" id="iv" aria-label="Current-voltage curve">
+        <div class="iv-head">
+          <h2>I–V curve</h2>
+          <div class="segmented tiny" role="radiogroup" aria-label="Current scale" id="iv-scale">
+            <button type="button" role="radio" data-scale="linear">Linear</button>
+            <button type="button" role="radio" data-scale="log">Log</button>
+          </div>
+        </div>
+        <canvas id="iv-canvas"></canvas>
+        <p class="iv-caption" id="iv-caption"></p>
+      </section>
+      <section class="currents" id="currents" aria-label="Currents"></section>
+      </div>
+      <div class="rg-ui" id="rg-ui" hidden>
+        <section class="rg-choose">
+          <h2>Process</h2>
+          <div class="rg-grid" role="radiogroup" aria-label="Recombination or generation process" id="rg-grid">
+            <span></span><span class="rg-col">Recombination</span><span class="rg-col">Generation</span>
+            <span class="rg-row">Band-to-band</span>
+            <button type="button" role="radio" data-proc="b2bR">Photon out</button>
+            <button type="button" role="radio" data-proc="b2bG">Photon in</button>
+            <span class="rg-row">R–G center</span>
+            <button type="button" role="radio" data-proc="srhR">Capture</button>
+            <button type="button" role="radio" data-proc="srhG">Emission</button>
+            <span class="rg-row">Three carriers</span>
+            <button type="button" role="radio" data-proc="aug">Auger</button>
+            <button type="button" role="radio" data-proc="imp">Impact ionization</button>
+          </div>
+        </section>
+        <section class="rg-rates" id="rg-rates" aria-label="Rates"></section>
+      </div>
+    </aside>
+  </main>
+
+  <footer class="footnote">
+    <p>
+      Models: nondegenerate statistics, complete ionization, abrupt (step) junction with the depletion approximation,
+      and the ideal diode equation (no generation or recombination inside the depletion region).
+      Notation and Si, Ge and GaAs parameters follow R. F. Pierret, <cite>Semiconductor Device Fundamentals</cite>
+      (Ch. 2, 3, 5 and 6). In the animation, carrier energies are spread out and particle rates compressed so the
+      behavior is visible; every number on the page is computed from the full equations.
+    </p>
+  </footer>
+
+  <script src="js/materials.js"></script>
+  <script src="js/physics.js"></script>
+  <script src="js/format.js"></script>
+  <script src="js/diagram.js"></script>
+  <script src="js/vslider.js"></script>
+  <script src="js/rg.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
