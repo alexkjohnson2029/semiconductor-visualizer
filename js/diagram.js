@@ -25,7 +25,7 @@ SV.COLORS = {
   rgc: '#8ef0c4',       // R–G centers and recombination / generation events
   text: '#e8ecf8',
   dim: '#8a94ad',
-  faint: '#5b6480',
+  faint: '#78829e',
   grid: 'rgba(140, 160, 230, 0.07)',
   axis: 'rgba(160, 176, 230, 0.28)',
   pill: 'rgba(6, 9, 18, 0.8)'
@@ -120,9 +120,6 @@ SV.Diagram = (function () {
     }
     return { img: c, size: s };
   }
-
-  // shared with the transistor view (bjt.js)
-  SV.draw = { drawMath, measureMath, roundRect, niceStep, makeSprite, MATH_STACK, UI_STACK };
 
   const rand = Math.random;
   /* background carriers live 8-18 s, starting at a random age so they fade out one at a time */

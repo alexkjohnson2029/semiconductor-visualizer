@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- The header mark: E_c and E_v bending across a pn junction, with the flat Fermi level. -->
+  <rect width="32" height="32" rx="7" fill="#060912"/>
+  <g fill="none" stroke="#f3f6ff" stroke-width="2.2" stroke-linecap="round">
+    <path d="M3 9h8c4 0 4 8 8 8h10"/>
+    <path d="M3 17h8c4 0 4 8 8 8h10"/>
+  </g>
+  <path d="M3 14h26" stroke="#ffc857" stroke-width="1.6" stroke-linecap="round"/>
+</svg>

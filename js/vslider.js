@@ -41,10 +41,12 @@ SV.VSlider = class {
         this.track.removeEventListener('pointermove', move);
         this.track.removeEventListener('pointerup', up);
         this.track.removeEventListener('pointercancel', up);
+        this.track.removeEventListener('lostpointercapture', up);
       };
       this.track.addEventListener('pointermove', move);
       this.track.addEventListener('pointerup', up);
       this.track.addEventListener('pointercancel', up);
+      this.track.addEventListener('lostpointercapture', up);
     });
     this.thumb.addEventListener('keydown', (ev) => {
       const big = ev.shiftKey ? 0.1 : 0.01;

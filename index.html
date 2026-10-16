@@ -8,7 +8,7 @@
   <meta name="theme-color" content="#060912">
   <link rel="preload" href="fonts/schibsted-grotesk-latin-500-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="fonts/stix-two-text-latin-400-italic.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23060912'/%3E%3Cpath d='M4 9h8c4 0 4 8 8 8h8' stroke='%23f3f6ff' stroke-width='2.2' fill='none' stroke-linecap='round'/%3E%3Cpath d='M4 17h8c4 0 4 8 8 8h8' stroke='%23f3f6ff' stroke-width='2.2' fill='none' stroke-linecap='round'/%3E%3Cpath d='M4 14h24' stroke='%23ffc857' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E">
+  <link rel="icon" type="image/svg+xml" href="icon.svg">
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -34,7 +34,6 @@
         <button type="button" role="radio" data-mode="bulk"><span class="lg">Single material</span><span class="sm">Single</span></button>
         <button type="button" role="radio" data-mode="pn">pn junction</button>
         <button type="button" role="radio" data-mode="rg"><span class="lg">R–G processes</span><span class="sm">R–G</span></button>
-        <button type="button" role="radio" data-mode="bjt"><span class="lg">npn / pnp</span><span class="sm">BJT</span></button>
       </div>
       <a class="about-link" href="#about">About</a>
     </div>
@@ -67,39 +66,10 @@
           <input type="range" id="nd" min="0" max="60" step="1" aria-label="N D">
           <span class="range-scale"><span>10<sup>13</sup></span><span>10<sup>19</sup> cm<sup>−3</sup></span></span>
         </div>
-        <div class="presets" aria-label="Doping presets" id="pn-presets">
+        <div class="presets" aria-label="Doping presets">
           <button type="button" data-preset="sym">Symmetric</button>
           <button type="button" data-preset="p+n">p<sup>+</sup>n</button>
           <button type="button" data-preset="n+p">n<sup>+</sup>p</button>
-        </div>
-        </div>
-        <div id="doping-bjt" hidden>
-        <div class="segmented small" role="radiogroup" aria-label="Transistor type" id="bjt-type">
-          <button type="button" role="radio" data-bjt="npn">npn</button>
-          <button type="button" role="radio" data-bjt="pnp">pnp</button>
-        </div>
-        <div class="range-field" id="ne-field">
-          <span class="range-head"><span class="range-name"><i class="mi">N</i><sub>E</sub> <span class="hint">emitter</span></span><span class="sci-in" id="ne-in"><input type="number" class="num mant" step="0.1" inputmode="decimal" aria-label="N E mantissa"><span class="x">×&thinsp;10</span><input type="number" class="num exp" step="1" inputmode="numeric" aria-label="N E power of ten"><span class="u">cm<sup>−3</sup></span></span></span>
-          <input type="range" id="ne" min="0" max="60" step="1" aria-label="Emitter doping">
-        </div>
-        <div class="range-field" id="nb-field">
-          <span class="range-head"><span class="range-name"><i class="mi">N</i><sub>B</sub> <span class="hint">base</span></span><span class="sci-in" id="nb-in"><input type="number" class="num mant" step="0.1" inputmode="decimal" aria-label="N B mantissa"><span class="x">×&thinsp;10</span><input type="number" class="num exp" step="1" inputmode="numeric" aria-label="N B power of ten"><span class="u">cm<sup>−3</sup></span></span></span>
-          <input type="range" id="nb" min="0" max="60" step="1" aria-label="Base doping">
-        </div>
-        <div class="range-field" id="nc-field">
-          <span class="range-head"><span class="range-name"><i class="mi">N</i><sub>C</sub> <span class="hint">collector</span></span><span class="sci-in" id="nc-in"><input type="number" class="num mant" step="0.1" inputmode="decimal" aria-label="N C mantissa"><span class="x">×&thinsp;10</span><input type="number" class="num exp" step="1" inputmode="numeric" aria-label="N C power of ten"><span class="u">cm<sup>−3</sup></span></span></span>
-          <input type="range" id="nc" min="0" max="60" step="1" aria-label="Collector doping">
-          <span class="range-scale"><span>10<sup>13</sup></span><span>10<sup>19</sup> cm<sup>−3</sup></span></span>
-        </div>
-        <div class="range-field">
-          <span class="range-head"><span class="range-name"><i class="mi">W</i><sub>B</sub> <span class="hint">base width</span></span><span class="num-in"><input type="number" class="num" id="wb-in" min="0.1" max="10" step="0.1" inputmode="decimal" aria-label="Base width in micrometers"><span class="u">µm</span></span></span>
-          <input type="range" id="wb" min="0" max="20" step="1" aria-label="Base width">
-          <span class="range-scale"><span>0.1 µm</span><span>10 µm</span></span>
-        </div>
-        <div class="presets" aria-label="Transistor presets">
-          <button type="button" data-bjtpreset="typ">Typical</button>
-          <button type="button" data-bjtpreset="wide">Wide base</button>
-          <button type="button" data-bjtpreset="weak">Weak emitter</button>
         </div>
         </div>
       </section>
@@ -109,7 +79,7 @@
         <div class="range-field">
           <span class="range-head"><span class="range-name">State</span><span class="num-in"><input type="number" class="num" id="rg-u-in" min="-1" max="1" step="0.05" inputmode="decimal" aria-label="Carrier state, from minus 1 (removed) to 1 (injected)"></span></span>
           <output class="range-sub" id="rg-u-out"></output>
-          <input type="range" id="rg-u" min="-1" max="1" step="0.02">
+          <input type="range" id="rg-u" min="-1" max="1" step="0.02" aria-label="Carrier state">
           <span class="range-scale"><span>removed</span><span>equilibrium</span><span>injected</span></span>
         </div>
         <div class="presets rg-presets" aria-label="Carrier presets">
@@ -119,7 +89,7 @@
         </div>
         <div class="range-field trap">
           <span class="range-head"><span class="range-name"><i class="mi">E</i><sub>T</sub> − <i class="mi">E</i><sub>i</sub> <span class="hint">R–G center level</span></span><span class="num-in"><input type="number" class="num" id="rg-et-in" step="0.01" inputmode="decimal" aria-label="E T minus E i in eV"><span class="u">eV</span></span></span>
-          <input type="range" id="rg-et" min="-0.5" max="0.5" step="0.01">
+          <input type="range" id="rg-et" min="-0.5" max="0.5" step="0.01" aria-label="R–G center level">
         </div>
         <div class="range-field">
           <span class="range-head"><span class="range-name"><i class="mi">τ</i><sub>n</sub> = <i class="mi">τ</i><sub>p</sub> <span class="hint">R–G center lifetime</span></span><span class="sci-in" id="rg-tau-in"><input type="number" class="num mant" step="0.1" min="1" max="9.9" inputmode="decimal" aria-label="Lifetime mantissa"><span class="x">×&thinsp;10</span><input type="number" class="num exp" step="1" inputmode="numeric" aria-label="Lifetime power of ten"><span class="u">s</span></span></span>
@@ -132,7 +102,7 @@
         <h2>Temperature</h2>
         <div class="range-field">
           <span class="range-head"><span class="range-name"><i class="mi">T</i></span><span class="num-in"><input type="number" class="num" id="t-in" min="200" max="500" step="1" inputmode="numeric" aria-label="Temperature in kelvin"><span class="u">K</span></span></span>
-          <input type="range" id="temp" min="200" max="500" step="5">
+          <input type="range" id="temp" min="200" max="500" step="5" aria-label="Temperature">
           <span class="range-scale"><span>200 K</span><span>500 K</span></span>
         </div>
       </section>
@@ -196,35 +166,6 @@
       </section>
       <section class="currents" id="currents" aria-label="Currents"></section>
       </div>
-      <div class="bjt-ui" id="bjt-ui" hidden>
-        <h2>Bias</h2>
-        <div class="op-mode" id="bjt-mode"></div>
-        <div class="bjt-vals">
-          <div class="va-readout sm"><span id="ve-sym"></span><span class="eq">=</span><input type="number" class="num va-in" id="ve-in" step="0.01" inputmode="decimal" aria-label="Emitter junction voltage in volts"><span class="unit">V</span><span class="sl-note" id="ve-note"></span></div>
-          <div class="va-readout sm"><span id="vr-sym"></span><span class="eq">=</span><input type="number" class="num va-in" id="vr-in" step="0.05" inputmode="decimal" aria-label="Collector junction voltage in volts"><span class="unit">V</span><span class="sl-note" id="vr-note"></span></div>
-        </div>
-        <div class="bjt-sliders">
-          <div class="bjt-sl"><span class="sl-cap" id="ve-cap"></span>
-            <div class="vslider" id="vs-ve"><div class="vs-track"><div class="vs-rail"></div><div class="vs-fill"></div><div class="vs-ticks"></div><div class="vs-thumb" aria-label="Emitter junction voltage"></div></div></div>
-          </div>
-          <div class="bjt-sl"><span class="sl-cap" id="vr-cap"></span>
-            <div class="vslider" id="vs-vr"><div class="vs-track"><div class="vs-rail"></div><div class="vs-fill"></div><div class="vs-ticks"></div><div class="vs-thumb" aria-label="Collector junction voltage"></div></div></div>
-          </div>
-        </div>
-        <div class="presets bjt-presets" aria-label="Operating mode presets">
-          <button type="button" data-op="active">Active</button>
-          <button type="button" data-op="saturation">Saturation</button>
-          <button type="button" data-op="cutoff">Cutoff</button>
-          <button type="button" data-op="inverse">Inverse</button>
-        </div>
-        <p class="bias-state" id="bjt-state"></p>
-        <section class="iv" id="bjt-out" aria-label="Output characteristics">
-          <div class="iv-head"><h2>Output curves</h2></div>
-          <canvas id="bjt-out-canvas"></canvas>
-          <p class="iv-caption" id="bjt-out-caption"></p>
-        </section>
-        <section class="currents" id="bjt-currents" aria-label="Currents"></section>
-      </div>
       <div class="rg-ui" id="rg-ui" hidden>
         <section class="rg-choose">
           <h2>Process</h2>
@@ -248,7 +189,7 @@
 
   <section class="about" id="about" aria-labelledby="about-title">
     <div class="about-inner">
-      <h2 id="about-title">About</h2>
+      <h2 id="about-title" tabindex="-1">About</h2>
       <p>
         I'm an aspiring electrical engineer with a growing interest in semiconductor technologies. I'm currently
         taking Microelectronic Technologies, and I'm especially interested in semiconductor physics: how doping,
@@ -256,7 +197,8 @@
       </p>
       <p>
         I built Fermi’s Sandbox to make those ideas something you can play with instead of only read about. Pick a material,
-        change the doping, form a pn junction and bias it, and watch the bands, fields and currents respond.
+        change the doping, form a pn junction and bias it, or step through recombination and generation, and watch the bands,
+        fields and currents respond.
       </p>
       <a class="about-cta" href="https://www.linkedin.com/in/alex-kim-johnson/" target="_blank" rel="noopener">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.98 3.5a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5zM3 9.5h4V21H3zM9.5 9.5h3.8v1.6h.1c.5-1 1.8-2 3.8-2 4 0 4.8 2.6 4.8 6V21h-4v-5.2c0-1.2 0-2.8-1.7-2.8s-2 1.3-2 2.7V21h-4z" fill="currentColor"/></svg>
@@ -282,7 +224,6 @@
   <script src="js/vslider.js"></script>
   <script src="js/numinput.js"></script>
   <script src="js/rg.js"></script>
-  <script src="js/bjt.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>
