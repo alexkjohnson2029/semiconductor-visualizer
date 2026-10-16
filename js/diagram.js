@@ -121,6 +121,9 @@ SV.Diagram = (function () {
     return { img: c, size: s };
   }
 
+  // shared with the transistor view (bjt.js)
+  SV.draw = { drawMath, measureMath, roundRect, niceStep, makeSprite, MATH_STACK, UI_STACK };
+
   const rand = Math.random;
   /* background carriers live 8-18 s, starting at a random age so they fade out one at a time */
   const lifespan = () => { const life = 8 + rand() * 10; return { life, age: rand() * life }; };

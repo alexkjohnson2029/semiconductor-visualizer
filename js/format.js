@@ -85,7 +85,12 @@ SV.fmt = (function () {
         i++;
         let t;
         if (src[i] === '{') {
-          const j = src.indexOf('}', i);
+          // matching brace, so nested groups like ^{qV_{BE}/kT} work
+          let j = i, depth = 0;
+          for (; j < src.length; j++) {
+            if (src[j] === '{') depth++;
+            else if (src[j] === '}' && --depth === 0) break;
+          }
           t = src.slice(i + 1, j); i = j + 1;
         } else { t = src[i]; i++; }
         parts.push({ t: t.replace(/-/g, MINUS), raw: t, st });

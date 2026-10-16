@@ -69,9 +69,11 @@ SV.sciInput = function (root, { min, max, onCommit }) {
     mant.value = m % 1 === 0 ? m.toFixed(1) : String(m);
     exp.value = e;
   };
+  // only commit complete-looking values, so typing "16" doesn't briefly apply 10^1
   const read = () => {
     const m = parseFloat(mant.value), e = parseInt(exp.value, 10);
     if (!isFinite(m) || !isFinite(e) || m <= 0) return null;
+    if (e < +exp.min - 1 || e > +exp.max) return null;
     return clamp(m * Math.pow(10, e));
   };
   for (const el of [mant, exp]) {

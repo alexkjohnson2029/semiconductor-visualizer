@@ -20,6 +20,11 @@
     rgU: 0,
     rgET: 0,
     rgTau: null,  // null: use the material's default lifetime
+    bjtType: 'npn',
+    NE: 1e18, NB: 1e17, NC: 1e16,
+    WB: 1e-4,     // metallurgical base width (cm)
+    VEB: 0.65,    // forward bias on the emitter junction (V_BE npn, V_EB pnp)
+    VCB: 2,       // reverse bias on the collector junction (V_CB npn, V_BC pnp)
     show: { carriers: !reduceMotion, flows: true, quasi: true, field: true, diffs: true }
   };
 
@@ -28,7 +33,16 @@
     const h = new URLSearchParams(location.hash.slice(1));
     const num = (k, lo, hi) => { const v = parseFloat(h.get(k)); return isFinite(v) ? Math.min(hi, Math.max(lo, v)) : null; };
     if (MATS[h.get('m')]) state.material = h.get('m');
-    if (['bulk', 'pn', 'rg'].includes(h.get('mode'))) state.mode = h.get('mode');
+    if (['bulk', 'pn', 'rg', 'bjt'].includes(h.get('mode'))) state.mode = h.get('mode');
+    if (['npn', 'pnp'].includes(h.get('bt'))) state.bjtType = h.get('bt');
+    const NE = num('NE', 1e13, 1e19), NB = num('NB', 1e13, 1e19), NC = num('NC', 1e13, 1e19), WB = num('WB', 0.1, 10);
+    const VE = num('VE', -2, 2), VR = num('VR', -2, 10);
+    if (NE) state.NE = NE;
+    if (NB) state.NB = NB;
+    if (NC) state.NC = NC;
+    if (WB) state.WB = WB * 1e-4;
+    if (VE != null) state.VEB = VE;
+    if (VR != null) state.VCB = VR;
     if (SV.RG_PROCESSES[h.get('proc')]) state.rgProc = h.get('proc');
     const u = num('u', -1, 1), et = num('et', -2, 2), tau = num('tau', 1e-10, 1e-3);
     if (u != null) state.rgU = u;
@@ -53,6 +67,10 @@
       s.set('mode', state.mode);
       if (state.mode === 'pn') {
         s.set('NA', state.NA.toExponential(2)); s.set('ND', state.ND.toExponential(2)); s.set('VA', state.VA.toFixed(2));
+      } else if (state.mode === 'bjt') {
+        s.set('bt', state.bjtType);
+        s.set('NE', state.NE.toExponential(2)); s.set('NB', state.NB.toExponential(2)); s.set('NC', state.NC.toExponential(2));
+        s.set('WB', (state.WB * 1e4).toPrecision(3)); s.set('VE', state.VEB.toFixed(2)); s.set('VR', state.VCB.toFixed(2));
       } else if (state.mode === 'bulk') {
         s.set('type', state.bulkType); s.set('N', state.bulkN.toExponential(2)); s.set('V', state.Vbulk.toFixed(2));
       } else {
@@ -170,7 +188,13 @@
     T: SV.numInput($('t-in'), { min: () => 200, max: () => 500, decimals: 0, onCommit: (v) => { state.T = Math.round(v); update(); } }),
     va: SV.numInput($('va-in'), { min: () => vslider.min, max: () => vslider.max, decimals: 2, onCommit: (v) => setBias(Math.round(v * 1000) / 1000) }),
     u: SV.numInput($('rg-u-in'), { min: () => -1, max: () => 1, decimals: 2, onCommit: (v) => { state.rgU = v; update(); } }),
-    et: SV.numInput($('rg-et-in'), { min: () => -Infinity, max: () => Infinity, decimals: 2, onCommit: (v) => { state.rgET = v; update(); } })
+    et: SV.numInput($('rg-et-in'), { min: () => -Infinity, max: () => Infinity, decimals: 2, onCommit: (v) => { state.rgET = v; update(); } }),
+    ne: SV.sciInput($('ne-in'), { min: 1e13, max: 1e19, onCommit: (v) => { state.NE = v; update(); } }),
+    nb: SV.sciInput($('nb-in'), { min: 1e13, max: 1e19, onCommit: (v) => { state.NB = v; update(); } }),
+    nc: SV.sciInput($('nc-in'), { min: 1e13, max: 1e19, onCommit: (v) => { state.NC = v; update(); } }),
+    wb: SV.numInput($('wb-in'), { min: () => 0.1, max: () => 10, decimals: 2, onCommit: (v) => { state.WB = v * 1e-4; update(); } }),
+    ve: SV.numInput($('ve-in'), { min: () => vsVE.min, max: () => vsVE.max, decimals: 2, onCommit: (v) => { state.VEB = Math.round(v * 1000) / 1000; update(); } }),
+    vr: SV.numInput($('vr-in'), { min: () => vsVR.min, max: () => vsVR.max, decimals: 2, onCommit: (v) => { state.VCB = Math.round(v * 1000) / 1000; update(); } })
   };
 
   /* ---------- slider ---------- */
@@ -179,8 +203,12 @@
     onChange: setBias
   });
 
+  const vsVE = new SV.VSlider($('vs-ve'), { min: -2, max: 0.75, value: state.VEB, onChange: (v) => { state.VEB = v; update(); } });
+  const vsVR = new SV.VSlider($('vs-vr'), { min: -0.6, max: 10, value: state.VCB, onChange: (v) => { state.VCB = v; update(); } });
+
   /* ---------- diagram ---------- */
   const diagram = new SV.Diagram($('diagram'));
+  const bjtView = new SV.BJTView($('diagram'));
   const rgView = new SV.RGView($('diagram'));
   rgView.onStep = (i) => {
     $('rg-steps').querySelectorAll('.rg-step').forEach((el, j) => el.classList.toggle('on', j === i));
@@ -191,13 +219,17 @@
   function update() {
     const pn = state.mode === 'pn';
     const rgMode = state.mode === 'rg';
+    const bjtMode = state.mode === 'bjt';
     document.body.dataset.mode = state.mode;
-    $('bias-ui').hidden = rgMode;
+    $('bias-ui').hidden = rgMode || bjtMode;
     $('rg-ui').hidden = !rgMode;
+    $('bjt-ui').hidden = !bjtMode;
     $('rg-controls').hidden = !rgMode;
     $('rg-steps').hidden = !rgMode;
+    $('doping-bjt').hidden = !bjtMode;
     for (const id of ['toggle-flows', 'toggle-quasi', 'toggle-field', 'toggle-diffs']) $(id).hidden = rgMode;
     if (rgMode) { updateRG(); return; }
+    if (bjtMode) { updateBJT(); return; }
 
     if (pn) {
       const r = P.vaRangePN(state);
@@ -841,27 +873,358 @@
       rows.map((r) => `<div class="eq-row"><div class="eq">${r.eq}</div><div class="eq-val">${r.val}</div><div class="eq-ref">Pierret ${r.ref}</div></div>`).join('');
   }
 
+  /* ---------- npn / pnp tab ---------- */
+  function bjtNames(m) {
+    return m.npn
+      ? { ve: 'V_{BE}', vr: 'V_{CB}', vce: 'V_{CE}', vbc: 'V_{BC}', min: 'electrons', maj: 'holes', minOne: 'electron', majOne: 'hole',
+          B0: 'n_{B0}', dB: 'Δn_B', E0: 'p_{E0}', C0: 'p_{C0}', mn: 'n', mj: 'p', sp: 'e', other: 'h' }
+      : { ve: 'V_{EB}', vr: 'V_{BC}', vce: 'V_{EC}', vbc: 'V_{CB}', min: 'holes', maj: 'electrons', minOne: 'hole', majOne: 'electron',
+          B0: 'p_{B0}', dB: 'Δp_B', E0: 'n_{E0}', C0: 'n_{C0}', mn: 'p', mj: 'n', sp: 'h', other: 'e' };
+  }
+
+  function updateBJT() {
+    const r = P.bjtRange(state);
+    state.VEB = Math.max(r.veMin, Math.min(r.veMax, state.VEB));
+    state.VCB = Math.max(r.vrMin, Math.min(r.vrMax, state.VCB));
+    // (typed doping commits only complete values, so these clamps don't fire mid-typing)
+    vsVE.setRange(r.veMin, r.veMax, 0.4, []);
+    vsVE.set(state.VEB);
+    vsVR.setRange(r.vrMin, r.vrMax, 0.2, []);
+    vsVR.set(state.VCB);
+    model = P.bjt(state);
+    bjtView.setModel(model, { ...state.show });
+    const m = model, nm = bjtNames(m);
+
+    setRadio($('materials'), 'mat', state.material);
+    setRadio($('mode'), 'mode', state.mode);
+    setRadio($('bjt-type'), 'bjt', state.bjtType);
+    $('doping-bulk').hidden = true;
+    $('doping-pn').hidden = true;
+    const nCol = 'var(--electron)', pCol = 'var(--hole)';
+    for (const [id, key, isN] of [['ne', 'NE', m.npn], ['nb', 'NB', !m.npn], ['nc', 'NC', m.npn]]) {
+      const el = $(id);
+      if (document.activeElement !== el) el.value = toIdx(state[key]);
+      el.style.setProperty('--fill', isN ? nCol : pCol);
+      setRangeFill(el);
+      typed[id].set(state[key]);
+    }
+    const wb = $('wb');
+    if (document.activeElement !== wb) wb.value = NL.toIdx(state.WB * 1e4, -1);
+    wb.style.setProperty('--fill', 'var(--ef)');
+    setRangeFill(wb);
+    typed.wb.set(state.WB * 1e4);
+    $('temp').value = state.T; setRangeFill($('temp')); typed.T.set(state.T);
+    document.querySelectorAll('[data-show]').forEach((c) => { c.checked = state.show[c.dataset.show]; });
+    for (const id of ['toggle-quasi', 'toggle-flows']) {
+      $(id).classList.remove('disabled');
+      $(id).querySelector('input').disabled = false;
+    }
+
+    // bias panel
+    $('ve-sym').innerHTML = mh(nm.ve);
+    $('vr-sym').innerHTML = mh(nm.vr);
+    typed.ve.set(state.VEB);
+    typed.vr.set(state.VCB);
+    $('ve-cap').innerHTML = mh(nm.ve);
+    $('vr-cap').innerHTML = mh(nm.vr);
+    $('ve-note').textContent = 'emitter junction, + is forward';
+    $('vr-note').textContent = 'collector junction, + is reverse';
+    const modeName = { active: 'Forward active', saturation: 'Saturation', cutoff: 'Cutoff', inverse: 'Inverse active', equilibrium: 'Equilibrium' }[m.opMode];
+    $('bjt-mode').innerHTML = `<span class="op-badge op-${m.opMode}">${modeName}</span><span class="op-vce">${mh(nm.vce)} = ${F.signed(state.VEB + state.VCB, 2)} V</span>`;
+    document.querySelectorAll('[data-op]').forEach((b) => b.classList.toggle('on', b.dataset.op === m.opMode));
+    renderBJTState(m, nm);
+
+    renderLegendBJT(m, nm);
+    renderPropsBJT(m);
+    renderReadoutsBJT(m);
+    renderNoticeBJT(m, nm);
+    renderEquationsBJT(m, nm);
+    renderCurrentsBJT(m, nm);
+    drawBJTOut();
+    $('diagram').setAttribute('aria-label', `Band diagram of a ${m.mat.name} ${m.npn ? 'npn' : 'pnp'} transistor in ${modeName.toLowerCase()} mode. Neutral base width ${F.lengthStr(m.W)}, current gain ${m.beta.toFixed(0)}.`);
+    writeHash();
+  }
+
+  function renderBJTState(m, nm) {
+    const t = {
+      active: `<strong>Forward active.</strong> The forward-biased emitter junction injects ${nm.min} into the base. They diffuse across the thin base, and the reverse-biased collector junction sweeps almost all of them into the collector. So ${mh('J_C ≈ αJ_E')} and ${mh('J_C ≈ βJ_B')}: a small base current controls a large collector current.`,
+      saturation: `<strong>Saturation.</strong> Both junctions are forward biased, so the collector injects ${nm.min} back into the base too. The base fills with excess carriers and ${mh('J_C')} falls below ${mh('βJ_B')}. ${mh(nm.vce)} is small: the transistor acts like a closed switch.`,
+      cutoff: `<strong>Cutoff.</strong> Both junctions are reverse biased. Nothing is injected and only tiny leakage currents flow: the transistor is an open switch.`,
+      inverse: `<strong>Inverse active.</strong> The roles swap: the collector junction is forward biased and injects into the base, and the emitter collects. Gain is poor because the lightly doped collector makes a weak "emitter": the readouts below switch to the reverse gains ${mh('β_R')}, ${mh('α_R')} and ${mh('γ_R')}.`,
+      equilibrium: `<strong>Equilibrium.</strong> No bias, so ${mh('E_F')} is flat through emitter, base and collector and no current flows.`
+    };
+    $('bjt-state').innerHTML = t[m.opMode];
+  }
+
+  function renderLegendBJT(m, nm) {
+    const eq = m.opMode === 'equilibrium';
+    const q = !eq && state.show.quasi;
+    const items = [
+      `<span class="item"><span class="sw band"></span><span>${mh('E_c, E_v')}</span></span>`,
+      `<span class="item"><span class="sw ei"></span><span>${mh('E_i')}</span></span>`,
+      `<span class="item${q ? ' off' : ''}"><span class="sw ef"></span><span>${mh('E_F')}</span></span>`,
+      `<span class="item${q ? '' : ' off'}"><span class="sw fn"></span><span>${mh('F_N')}</span></span>`,
+      `<span class="item${q ? '' : ' off'}"><span class="sw fp"></span><span>${mh('F_P')}</span></span>`,
+      '<span class="item"><span class="dot"></span>electron</span>',
+      '<span class="item"><span class="ring"></span>hole</span>',
+      '<span class="item"><span class="sw diff"></span><span class="t-diff">diffusion</span></span>',
+      '<span class="item"><span class="sw drift"></span><span class="t-drift">drift</span></span>',
+      '<span class="item"><span class="trap-sq"></span><span class="t-rg">recombination</span></span>',
+      '<span class="item"><span class="sw base"></span><span>neutral base</span></span>'
+    ];
+    $('legend').innerHTML = items.join('') + `<span class="note">The animation exaggerates base recombination and back-injection so you can see them; the numbers are exact. Hover a carrier for its story.</span>`;
+  }
+
+  function renderPropsBJT(m) {
+    const T = state.T;
+    $('props-title').textContent = m.mat.name + ' at ' + T + ' K';
+    const sp = (s) => (m.npn ? s : s === 'n' ? 'p' : 'n');
+    const rows = [
+      ['E_g', F.eV(m.fr.Eg, 3)],
+      ['n_i', F.sciHTML(m.ni, 2) + ' cm<sup>−3</sup>'],
+      ['K_S', m.mat.Ks.toFixed(1)],
+      [`μ_${sp('n')} \`(base)\``, m.muMinB.toFixed(0) + ' cm²/V·s'],
+      [`μ_${sp('p')} \`(emitter)\``, m.muMinE.toFixed(0) + ' cm²/V·s'],
+      [`D_B`, m.DB.toFixed(1) + ' cm²/s'],
+      [`L_B`, F.lengthStr(m.LB)],
+      [`L_E`, F.lengthStr(m.LE)],
+      ['τ `(assumed)`', F.sciHTML(m.tau, 0) + ' s']
+    ];
+    $('props').innerHTML = rows.map(([k, v]) => `<dt>${mh(k)}</dt><dd>${v}</dd>`).join('');
+    $('props-note').textContent = 'Minority-carrier values in each region; mobilities from empirical fits, one lifetime for all regions.';
+  }
+
+  function renderReadoutsBJT(m) {
+    const W = F.length(m.W);
+    const big = (x) => (x >= 1e4 ? F.sciHTML(x, 1) : x.toFixed(x >= 100 ? 0 : 1));
+    // inverse mode shows the reverse gains (collector acting as emitter)
+    const R = m.opMode === 'inverse';
+    const beta = R ? m.betaR : m.beta, alpha = R ? m.alphaR : m.alpha, gamma = R ? m.gammaR : m.gamma;
+    $('readouts').innerHTML = [
+      metric(R ? 'β_R' : 'β_{dc}', beta > 0 && isFinite(beta) ? big(beta) : '—', '', true),
+      metric(R ? 'α_R' : 'α_{dc}', alpha.toFixed(5), ''),
+      metric(R ? 'γ_R' : 'γ', gamma.toFixed(5), ''),
+      metric('α_T', m.alphaT.toFixed(5), ''),
+      metric('W', W.v, W.u),
+      metric('J_C', m.JC === 0 ? '0' : signedSci(m.JC), '', false, 'A/cm²')
+    ].join('');
+  }
+
+  function renderNoticeBJT(m, nm) {
+    const msgs = [];
+    if (m.punch) msgs.push(`<strong>Punch-through.</strong> The two depletion regions have nearly met across the base (neutral ${mh('W')} → 0). In a real device the collector current would run away; reduce ${mh(nm.vr)} or widen or dope the base more.`);
+    if (m.highInjection) msgs.push(`High-level injection: the injected ${nm.min} rival the base doping, so the ideal (low-injection) model overstates the current here.`);
+    if (m.degenerateE) msgs.push(`The emitter is doped heavily enough to be degenerate; real emitters also see band-gap narrowing, which lowers ${mh('γ')} below the value shown.`);
+    $('notice').hidden = !msgs.length;
+    $('notice').innerHTML = msgs.join(' ');
+  }
+
+  function renderEquationsBJT(m, nm) {
+    const kT = m.Vt.toFixed(4);
+    const veS = nm.ve, vcS = nm.vbc;   // collector junction forward voltage is −V_CB (npn) / −V_BC (pnp)
+    const rows = [
+      {
+        eq: mh(nm.dB + '(0) = ' + nm.B0) + big('(') + mh('e^{q' + veS + '/kT} − 1') + big(')') + mh(',  ' + nm.dB + '(W) = ' + nm.B0) + big('(') + mh('e^{q' + vcS + '/kT} − 1') + big(')'),
+        val: `${mh(nm.B0 + ' = n_i^2 / N_B')} = ${F.sciHTML(m.minB0, 2)} cm<sup>−3</sup>, so ${mh(nm.dB + '(0)')} = <b>${signedSci(m.dB0)}</b> and ${mh(nm.dB + '(W)')} = <b>${signedSci(m.dBW)}</b> cm<sup>−3</sup> (law of the junction at each edge of the base).`,
+        ref: 'Ch. 11'
+      },
+      {
+        eq: mh('W = W_B − x_{B,E} − x_{B,C}'),
+        val: `${F.lengthStr(m.WB)} − ${F.lengthStr(m.bE)} − ${F.lengthStr(m.bC)} = <b>${F.lengthStr(m.W)}</b>. More reverse bias on the collector widens its depletion region and narrows the base: base-width modulation (the Early effect).`,
+        ref: 'Ch. 11'
+      },
+      {
+        eq: mh('J_{E' + nm.mn + '} = ') + frac(mh('qD_B ' + nm.B0), mh('L_B')) + big('[') + mh('(e^{q' + veS + '/kT} − 1) "coth"') + frac(mh('W'), mh('L_B')) + mh(' − (e^{q' + vcS + '/kT} − 1) "csch"') + frac(mh('W'), mh('L_B')) + big(']'),
+        val: `${mh('D_B')} = ${m.DB.toFixed(1)} cm²/s, ${mh('L_B')} = ${F.lengthStr(m.LB)}: ${nm.min} injected into the base, <b>${signedSci(m.JEn)} A/cm²</b>. The same form with coth and csch swapped gives ${mh('J_{C' + nm.mn + '}')} = <b>${signedSci(m.JCn)} A/cm²</b> reaching the collector.`,
+        ref: 'Ch. 11'
+      },
+      {
+        eq: mh('J_{E' + nm.mj + '} = ') + frac(mh('qD_E ' + nm.E0), mh('L_E')) + big('(') + mh('e^{q' + veS + '/kT} − 1') + big(')'),
+        val: `${mh(nm.E0)} = ${F.sciHTML(m.minE0, 2)} cm<sup>−3</sup>: ${nm.maj} back-injected into the emitter, <b>${signedSci(m.JEp)} A/cm²</b>. Wasted current that only the base supplies.`,
+        ref: 'Ch. 11'
+      },
+      {
+        eq: mh('γ = ') + frac(mh('J_{E' + nm.mn + '}'), mh('J_{E' + nm.mn + '} + J_{E' + nm.mj + '}')) + mh(' ≈ ') + big('(') + mh('1 + ') + frac(mh('D_E N_B W'), mh('D_B N_E L_E')) + big(')') + mh('^{−1}'),
+        val: `Emitter efficiency <b>${m.gamma.toFixed(5)}</b>. A heavily doped emitter (${mh('N_E ≫ N_B')}) keeps it close to 1.`,
+        ref: 'Ch. 11'
+      },
+      {
+        eq: mh('α_T = ') + frac(mh('J_{C' + nm.mn + '}'), mh('J_{E' + nm.mn + '}')) + mh(' = ') + frac(mh('1'), mh('"cosh"(W/L_B)')) + mh(' ≈ 1 − ') + frac(mh('W^2'), mh('2L_B^2')),
+        val: `Base transport factor <b>${m.alphaT.toFixed(5)}</b>: the fraction of injected ${nm.min} that cross the base without recombining. A base much thinner than ${mh('L_B')} keeps it close to 1.`,
+        ref: 'Ch. 11'
+      },
+      {
+        eq: mh('α_{dc} = γα_T,  β_{dc} = ') + frac(mh('α_{dc}'), mh('1 − α_{dc}')),
+        val: `${mh('α_{dc}')} = <b>${m.alpha.toFixed(5)}</b>, ${mh('β_{dc}')} = <b>${m.beta.toFixed(0)}</b>. Because ${mh('α_{dc}')} is so close to 1, small losses change ${mh('β_{dc}')} a lot.`,
+        ref: 'Ch. 11'
+      },
+      {
+        eq: mh('J_E = J_{E' + nm.mn + '} + J_{E' + nm.mj + '},  J_C = J_{C' + nm.mn + '} − J_{C' + nm.mj + '},  J_B = J_E − J_C'),
+        val: `${mh('J_E')} = ${signedSci(m.JE)}, ${mh('J_C')} = <b>${signedSci(m.JC)}</b>, ${mh('J_B')} = <b>${signedSci(m.JB)}</b> A/cm²${m.JB > 0 && m.opMode === 'active' ? `; ${mh('J_C/J_B')} = ${(m.JC / m.JB).toFixed(0)}` : ''}.`,
+        ref: 'Ch. 11'
+      },
+      {
+        eq: mh('qV_{bi} = kT "ln"') + big('(') + frac(mh('N_E N_B'), mh('n_i^2')) + big(')') + mh(',  W_{dep} = ') + big('[') + frac(mh('2K_S ε_0'), mh('q')) + frac(mh('N_1 + N_2'), mh('N_1 N_2')) + mh('(V_{bi} − V_j)') + big(']') + mh('^{1/2}'),
+        val: `${mh('kT')} = ${kT} eV. Emitter junction: ${mh('V_{bi}')} = ${m.VbiE.toFixed(3)} V, depletion width ${F.lengthStr(m.WEB)}. Collector junction: ${mh('V_{bi}')} = ${m.VbiC.toFixed(3)} V, ${F.lengthStr(m.WCB)}.`,
+        ref: 'Ch. 5'
+      }
+    ];
+    $('equations').innerHTML = `<h2>How the numbers are computed</h2>
+      <p class="eq-intro">Ideal transistor: step junctions, low-level injection, no recombination in the depletion regions, long emitter and collector. Currents are per unit area.</p>` +
+      rows.map((r) => `<div class="eq-row"><div class="eq">${r.eq}</div><div class="eq-val">${r.val}</div><div class="eq-ref">Pierret ${r.ref}</div></div>`).join('');
+  }
+
+  function renderCurrentsBJT(m, nm) {
+    const rows = [
+      { sp: nm.sp, kind: 'diff', name: `${nm.min[0].toUpperCase() + nm.min.slice(1)} injected`, J: Math.abs(m.JEn), dir: Math.sign(m.JEn) || 1, flow: m.JEn >= 0 ? 'emitter → base' : 'base → emitter' },
+      { sp: nm.other, kind: 'diff', name: `${nm.maj[0].toUpperCase() + nm.maj.slice(1)} back-injected`, J: Math.abs(m.JEp), dir: -(Math.sign(m.JEp) || 1), flow: m.JEp >= 0 ? 'base → emitter' : 'emitter → base' },
+      { sp: nm.sp, kind: 'rec', name: 'Recombined in base', J: Math.abs(m.JrecB), dir: 0, flow: 'replaced by the base current' },
+      { sp: nm.sp, kind: 'drift', name: `${nm.min[0].toUpperCase() + nm.min.slice(1)} collected`, J: Math.abs(m.JCn), dir: Math.sign(m.JCn) || 1, flow: m.JCn >= 0 ? 'swept base → collector' : 'collector → base' },
+      { sp: nm.other, kind: m.JCp > 0 ? 'diff' : 'drift', name: m.JCp > 0 ? `${nm.maj[0].toUpperCase() + nm.maj.slice(1)} injected into collector` : 'Collector junction leakage', J: Math.abs(m.JCp), dir: m.JCp > 0 ? 1 : -1, flow: m.JCp > 0 ? 'base → collector' : 'collector → base' }
+    ];
+    const max = Math.max(1e-300, ...rows.map((r) => r.J));
+    const row = (c) => {
+      const color = c.sp === 'e' ? 'var(--electron)' : 'var(--hole)';
+      const w = !c.J ? 0 : Math.max(2, 100 * (1 + Math.log10(c.J / max) / 10));
+      const barColor = c.kind === 'diff' ? 'var(--diff)' : c.kind === 'rec' ? 'var(--rgc)' : 'var(--field)';
+      return `<div class="cur-row">
+        <span class="${c.sp === 'e' ? 'dot' : 'ring'}"></span>
+        <span class="cur-name">${c.name}</span>${dirSVG(c.J ? c.dir : 0, color)}
+        <span class="cur-flow">${c.flow}</span>
+        <span class="cur-bar"><i style="width:${w}%;background:${barColor}"></i></span>
+        <span class="cur-val">${!c.J ? '0' : F.sciHTML(c.J, 2)} A/cm²</span>
+      </div>`;
+    };
+    const term = (sym, J, word) => `<div class="term"><span class="eqline">${mh(sym)}</span><span class="value">${J === 0 ? '0' : signedSci(J)}<span class="unit">A/cm²</span></span><span class="dirtext">${word}</span></div>`;
+    const out = m.npn;
+    $('bjt-currents').innerHTML = `<h2>Where the current goes</h2>
+      <div class="mech">${rows.map(row).join('')}</div>
+      <div class="cur-net terms">
+        ${term('J_E', m.JE, out ? 'out of the emitter' : 'into the emitter')}
+        ${term('J_B', m.JB, out ? 'into the base' : 'out of the base')}
+        ${term('J_C', m.JC, out ? 'into the collector' : 'out of the collector')}
+      </div>
+      <p class="cur-note">Conventional current; ${nm.min} carry most of it from emitter to collector. Bars use a log scale over 10 decades.</p>`;
+  }
+
+  /* common-emitter output curves: J_C vs V_CE at a few fixed base currents */
+  let outCache = { key: '', curves: null }, outTimer = 0;
+  function bjtOutKey(levels) {
+    return [state.material, state.T, state.bjtType, state.NE, state.NB, state.NC, state.WB, levels.map((x) => x.toPrecision(3)).join(',')].join('|');
+  }
+  function drawBJTOut() {
+    if (state.mode !== 'bjt' || !model || model.mode !== 'bjt') return;
+    const m = model, nm = bjtNames(m);
+    const r = m.range;
+    const vceMax = Math.min(10, Math.max(2, Math.ceil((state.VEB + state.VCB) * 1.25)));
+    // base-current steps: the present J_B when the transistor is on, otherwise a typical one
+    let JBtop = m.JB;
+    if (!((m.opMode === 'active' || m.opMode === 'saturation') && JBtop > 0)) {
+      const on = Math.min(r.veMax - 0.05, r.VbiE - 0.25);
+      JBtop = P.bjt({ ...state, VEB: on, VCB: 2 }).JB;
+    }
+    const levels = [0.25, 0.5, 0.75, 1].map((f) => f * JBtop);
+    const key = bjtOutKey(levels) + '|' + vceMax;
+    if (outCache.key !== key) {
+      // computing the curves takes a moment, so wait until the sliders settle
+      clearTimeout(outTimer);
+      outTimer = setTimeout(() => {
+        outCache = { key, curves: P.bjtOutput(state, levels, vceMax, 36, r.veMax) };
+        drawBJTOut();
+      }, outCache.curves ? 160 : 0);
+    }
+    const cv = $('bjt-out-canvas');
+    const rect = cv.getBoundingClientRect();
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const W = Math.max(160, rect.width), H = Math.max(110, rect.height);
+    cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+    const g = cv.getContext('2d');
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    g.clearRect(0, 0, W, H);
+    const L = 8, R = 8, T = 14, B = 20;
+    const curves = outCache.curves;
+    const vce = state.VEB + state.VCB;
+    let Jmax = Math.max(m.JC, 1e-300);
+    if (curves) for (const c of curves) for (const p of c.pts) Jmax = Math.max(Jmax, p.J);
+    const curVmax = curves ? curves[0].pts[curves[0].pts.length - 1].V : vceMax;
+    const X = (v) => L + v / curVmax * (W - L - R);
+    const Y = (j) => T + (Jmax * 1.08 - j) / (Jmax * 1.14) * (H - T - B);
+    g.strokeStyle = 'rgba(160, 176, 230, 0.28)'; g.lineWidth = 1;
+    g.beginPath(); g.moveTo(L, Y(0)); g.lineTo(W - R, Y(0)); g.stroke();
+    g.beginPath(); g.moveTo(X(0), T); g.lineTo(X(0), H - B); g.stroke();
+    if (curves) {
+      curves.forEach((c, i) => {
+        g.strokeStyle = C.band; g.globalAlpha = 0.35 + 0.65 * (i + 1) / curves.length;
+        g.lineWidth = 1.6; g.shadowColor = C.bandGlow; g.shadowBlur = 6;
+        g.beginPath();
+        c.pts.forEach((p, k) => { const x = X(p.V), y = Math.max(T - 4, Y(p.J)); if (k) g.lineTo(x, y); else g.moveTo(x, y); });
+        g.stroke();
+      });
+      g.globalAlpha = 1; g.shadowBlur = 0;
+    }
+    if (vce >= 0 && vce <= curVmax) {
+      g.beginPath(); g.arc(X(vce), Math.max(T, Math.min(H - B, Y(m.JC))), 4.5, 0, Math.PI * 2);
+      g.fillStyle = C.ef; g.shadowColor = C.efGlow; g.shadowBlur = 10; g.fill(); g.shadowBlur = 0;
+    }
+    g.font = `500 10.5px "Schibsted Grotesk", system-ui, sans-serif`;
+    g.fillStyle = '#5b6480'; g.textBaseline = 'top';
+    g.textAlign = 'center'; g.fillText('0', X(0) + 4, H - B + 5);
+    g.textAlign = 'right'; g.fillText(curVmax.toFixed(0) + ' V', W - R, H - B + 5);
+    g.textAlign = 'left';
+    const jl = Jmax < 1000 ? Jmax.toFixed(Jmax < 10 ? 2 : 0) : Jmax.toExponential(0);
+    g.fillText(`J_C up to ${jl} A/cm²`, L + 4, 0);
+    $('bjt-out-caption').innerHTML = `${mh('J_C')} vs ${mh(nm.vce)} at four base currents up to ${mh('J_B')} = ${F.sciHTML(JBtop, 1)} A/cm². The flat part is the active region, sloped by the Early effect; the steep part near 0 is saturation. The dot is where you are.`;
+  }
+
+  function bjtStory(p) {
+    const m = model, nm = bjtNames(m);
+    const tag = (k) => ({ diff: '<span class="tag t-diff">Diffusion</span>', drift: '<span class="tag t-drift">Drift</span>',
+      rand: '<span class="tag t-rand">Random thermal motion</span>', rg: '<span class="tag t-rg">Recombination</span>' }[k]);
+    const one = p.sp === 'e' ? 'electron' : 'hole';
+    if (p.kind === 'bg') {
+      const where = { E: 'emitter', B: 'base', C: 'collector' }[p.reg];
+      return `${tag('rand')}<div class="st-title">Majority ${one} in the ${where}</div>
+        <p>It moves randomly. ${p.reg === 'B' ? `Base ${one}s are what the base current supplies: they replace the ones lost to recombination and back-injection.` : `Only the ones that reach the junction with enough energy take part in the current.`}</p>`;
+    }
+    if (p.kind === 'inj') {
+      const fromE = p.dir > 0;
+      const swept = fromE ? p.x >= m.xBr : p.x <= m.xBl;
+      if (!p.entered) return `${tag('diff')}<div class="st-title">${one[0].toUpperCase() + one.slice(1)} injected from the ${fromE ? 'emitter' : 'collector'}</div>
+        <p>The forward bias lowered the barrier to ${F.eV(fromE ? m.psiE : m.psiC, 2)}, so this ${one} gets over it into the base, where it becomes a minority carrier.</p>`;
+      if (p.rec) return `${tag('diff')}${tag('rg')}<div class="st-title">Lost in the base</div>
+        <p>This one will recombine with a base ${nm.majOne} before reaching the other side. In this device only about ${fmtPctBJT(1 - m.alphaT)} do (the base transport factor ${mh('α_T')} = ${m.alphaT.toFixed(4)}); the animation shows more so you can see it.</p>`;
+      if (!swept) return `${tag('diff')}<div class="st-title">Diffusing across the base</div>
+        <p>There is no field in the neutral base. The ${one} spreads down the concentration gradient from the ${fromE ? 'emitter' : 'collector'} side, where ${mh(nm.dB)} is high, toward the other side, where it is ${fromE ? 'nearly zero' : 'lower'}. The base is ${F.lengthStr(m.W)} wide, much less than the diffusion length ${F.lengthStr(m.LB)}, so almost all of them make it.</p>`;
+      return `${tag('drift')}<div class="st-title">Collected</div>
+        <p>At the edge of the ${fromE ? 'collector' : 'emitter'} depletion region the field ${mh('ℰ')} sweeps it across. This flow is the collector current.</p>`;
+    }
+    return `${tag('diff')}${tag('rg')}<div class="st-title">${one[0].toUpperCase() + one.slice(1)} back-injected</div>
+      <p>The forward-biased junction also lets base ${nm.majOne}s into the ${p.dir < 0 ? 'emitter' : 'collector'}, where they recombine. They don't reach the collector, so they only add to the base current and lower the emitter efficiency ${mh('γ')} = ${m.gamma.toFixed(4)}.</p>`;
+  }
+  function fmtPctBJT(r) { const pct = r * 100; return pct >= 0.1 ? pct.toFixed(pct >= 10 ? 0 : 2) + '%' : F.sciHTML(pct, 0) + '%'; }
+
   /* ---------- diagram hover readout ---------- */
   const probe = $('probe');
   function showProbe(ev) {
     const cv = $('diagram');
     const r = cv.getBoundingClientRect();
     const px = ev.clientX - r.left, py = ev.clientY - r.top;
-    const geo = diagram.geo;
+    const view = state.mode === 'bjt' ? bjtView : diagram;
+    const geo = view.geo;
     if (state.mode === 'rg') { hideProbe(); return; }
     if (!geo || px < geo.plotL || px > geo.plotR || py < geo.bandTop || py > geo.bottom) { hideProbe(); return; }
-    const part = diagram.particleAt(px, py);
-    diagram.hoverParticle = part;
+    const part = view.particleAt(px, py);
+    view.hoverParticle = part;
     if (part) {
-      diagram.setHover(null);
+      view.setHover(null);
       probe.innerHTML = carrierStory(part);
       probe.classList.add('story');
       placeProbe(ev);
       return;
     }
     probe.classList.remove('story');
-    diagram.setHover(px);
-    const inf = diagram.info(px);
+    view.setHover(px);
+    const inf = view.info(px);
     if (!inf) { hideProbe(); return; }
     // nearest level to the pointer
     let near = null, best = 14;
@@ -874,7 +1237,8 @@
         <span class="pr-val">${F.signed(lv.E, 3)} eV</span>
         ${lv.key === near ? `<span class="pr-desc">${lv.desc}</span>` : ''}
       </div>`).join('');
-    const xLine = inf.compressed || model.mode === 'bulk'
+    const xLine = model.mode === 'bjt' ? `${mh('x')} = ${(inf.x * 1e4).toFixed(3)} µm`
+      : inf.compressed || model.mode === 'bulk'
       ? (model.mode === 'bulk' ? `${mh('x')} = ${(inf.x * 1e4).toFixed(2)} µm` : '')
       : `${mh('x')} = ${(inf.x * 1e4).toFixed(3)} µm`;
     const field = Math.abs(inf.field) > 0 ? `${F.sciHTML(Math.abs(inf.field), 2)} V/cm ${inf.field < 0 ? '← (toward p)' : '→'}` : '0';
@@ -898,8 +1262,7 @@
   }
   function hideProbe() {
     probe.hidden = true;
-    diagram.setHover(null);
-    diagram.hoverParticle = null;
+    for (const v of [diagram, bjtView]) { v.setHover(null); v.hoverParticle = null; }
   }
 
   /* what a hovered carrier is doing, and what happens to it next */
@@ -909,6 +1272,7 @@
     const one = e ? 'electron' : 'hole', many = e ? 'electrons' : 'holes', Name = e ? 'Electron' : 'Hole';
     const tag = (k) => ({ diff: '<span class="tag t-diff">Diffusion</span>', drift: '<span class="tag t-drift">Drift</span>',
       rand: '<span class="tag t-rand">Random thermal motion</span>', rg: '<span class="tag t-rg">R–G</span>' }[k]);
+    if (m.mode === 'bjt') return bjtStory(p);
     if (m.mode === 'bulk') {
       const maj = e ? m.n0 >= m.p0 : m.p0 > m.n0;
       const conc = e ? m.n0 : m.p0;
@@ -994,6 +1358,35 @@
     update();
   });
 
+  $('bjt-type').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-bjt]');
+    if (!b) return;
+    state.bjtType = b.dataset.bjt;
+    update();
+  });
+  radioKeys($('bjt-type'), '[data-bjt]');
+  for (const [id, key] of [['ne', 'NE'], ['nb', 'NB'], ['nc', 'NC']]) {
+    $(id).addEventListener('input', (e) => { state[key] = fromIdx(e.target.value); update(); });
+  }
+  $('wb').addEventListener('input', (e) => { state.WB = NL.fromIdx(e.target.value, -1) * 1e-4; update(); });
+  document.querySelectorAll('[data-bjtpreset]').forEach((b) => b.addEventListener('click', () => {
+    const p = b.dataset.bjtpreset;
+    if (p === 'typ') Object.assign(state, { NE: 1e18, NB: 1e17, NC: 1e16, WB: 1e-4 });
+    if (p === 'wide') Object.assign(state, { NE: 1e18, NB: 1e17, NC: 1e16, WB: 5e-4 });
+    if (p === 'weak') Object.assign(state, { NE: 1e17, NB: 1e17, NC: 1e16, WB: 1e-4 });
+    update();
+  }));
+  document.querySelectorAll('[data-op]').forEach((b) => b.addEventListener('click', () => {
+    const r = P.bjtRange(state);
+    const on = Math.min(r.veMax - 0.05, Math.round((r.VbiE - 0.25) * 20) / 20);
+    const op = b.dataset.op;
+    if (op === 'active') { state.VEB = on; state.VCB = 2; }
+    if (op === 'saturation') { state.VEB = on; state.VCB = Math.max(r.vrMin, -Math.round((on - 0.1) * 100) / 100); }
+    if (op === 'cutoff') { state.VEB = -0.5; state.VCB = 2; }
+    if (op === 'inverse') { state.VEB = -2; state.VCB = Math.max(r.vrMin, -on + 0.05); }
+    update();
+  }));
+
   $('rg-grid').addEventListener('click', (e) => {
     const b = e.target.closest('[data-proc]');
     if (!b) return;
@@ -1023,23 +1416,29 @@
   readHash();
   buildMaterials();
 
-  new ResizeObserver(() => { diagram.resize(); if (state.mode === 'pn') drawIV(); }).observe($('diagram'));
-  diagram.resize();
+  new ResizeObserver(() => {
+    diagram.resize(); bjtView.resize();
+    if (state.mode === 'pn') drawIV();
+    if (state.mode === 'bjt') drawBJTOut();
+  }).observe($('diagram'));
+  diagram.resize(); bjtView.resize();
   update();
 
   if (document.fonts && document.fonts.ready) {
-    document.fonts.ready.then(() => { diagram.dirty = true; if (state.mode === 'pn') drawIV(); });
+    document.fonts.ready.then(() => { diagram.dirty = true; bjtView.dirty = true; if (state.mode === 'pn') drawIV(); });
   }
 
   let last = performance.now();
   function loop(now) {
     const dt = (now - last) / 1000;
     last = now;
-    if (state.mode === 'rg') rgView.frame(dt); else diagram.frame(dt);
+    if (state.mode === 'rg') rgView.frame(dt);
+    else if (state.mode === 'bjt') bjtView.frame(dt);
+    else diagram.frame(dt);
     requestAnimationFrame(loop);
   }
   requestAnimationFrame(loop);
 
   // test/screenshot hook
-  window.SV.app = { state, update, diagram, rgView, showProbe };
+  window.SV.app = { state, update, diagram, rgView, bjtView, showProbe };
 })();

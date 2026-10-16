@@ -354,6 +354,209 @@ SV.physics = (function () {
     };
   }
 
+  /* ---------- bipolar junction transistor (Pierret Ch. 10, 11) ----------
+   *
+   * Ideal transistor: step junctions with the depletion approximation, low-level
+   * injection, no recombination in the depletion regions, long emitter and
+   * collector, and a neutral base of width W that shrinks as the collector
+   * junction is reverse biased (base-width modulation, the Early effect).
+   *
+   * One set of formulas covers npn and pnp. "Base minority" carriers are
+   * electrons in an npn and holes in a pnp. Voltages:
+   *   VE = forward bias on the emitter junction (V_BE npn, V_EB pnp)
+   *   VR = reverse bias on the collector junction (V_CB npn, V_BC pnp)
+   * Currents are particle-flow current densities (A/cm^2), positive in the
+   * direction of normal active-mode flow:
+   *   JEn  base minority carriers crossing the emitter junction into the base
+   *   JCn  the same carriers leaving the base into the collector
+   *   JEp  base majority carriers injected back into the emitter
+   *   JCp  base majority carriers injected into the collector (negative in active mode)
+   * Terminal currents: JE = JEn + JEp, JC = JCn − JCp, JB = JE − JC.
+   * Energy reference: emitter Fermi level = 0 eV.
+   */
+  function bjt(state) {
+    const mat = SV.MATERIALS[state.material];
+    const T = state.T, Vt = k * T;
+    const n_i = ni(mat, T), ni2 = n_i * n_i;
+    const fr = bandFrame(mat, T);
+    const Ks = mat.Ks;
+    const npn = state.bjtType !== 'pnp';
+    const s = npn ? 1 : -1;
+    const NE = state.NE, NB = state.NB, NC = state.NC, WB = state.WB;
+    const VE = state.VEB, VR = state.VCB, VC = -VR;   // VC: forward bias on the collector junction
+
+    // majority-carrier concentrations
+    const majE = npn ? carriers(NE, 0, n_i).n0 : carriers(0, NE, n_i).p0;
+    const majB = npn ? carriers(0, NB, n_i).p0 : carriers(NB, 0, n_i).n0;
+    const majC = npn ? carriers(NC, 0, n_i).n0 : carriers(0, NC, n_i).p0;
+    const minE0 = ni2 / majE, minB0 = ni2 / majB, minC0 = ni2 / majC;
+
+    // quasi-neutral Fermi levels (electron energy, eV) and intrinsic levels
+    const FE = 0, FB = -s * VE, FC = FB - s * VR;
+    const sigE = -s, sigB = s, sigC = -s;              // -1: n-type (E_i below E_F), +1: p-type
+    const EiE = FE + sigE * Vt * Math.log(majE / n_i);
+    const EiB = FB + sigB * Vt * Math.log(majB / n_i);
+    const EiC = FC + sigC * Vt * Math.log(majC / n_i);
+
+    const VbiE = Vt * Math.log(majE * majB / ni2);
+    const VbiC = Vt * Math.log(majB * majC / ni2);
+    const psiE = Math.max(VbiE - VE, 0.002), psiC = Math.max(VbiC - VC, 0.002);
+
+    const WEB = depletionWidth(Ks, NE, NB, psiE), WCB = depletionWidth(Ks, NB, NC, psiC);
+    let xE = WEB * NB / (NE + NB), bE = WEB * NE / (NE + NB);     // emitter side, base side
+    let bC = WCB * NC / (NB + NC), xC = WCB * NB / (NB + NC);     // base side, collector side
+    let W = WB - bE - bC;
+    const punch = W < 0.02 * WB;
+    if (punch) { const f = 0.98 * WB / (bE + bC); bE *= f; bC *= f; W = 0.02 * WB; }
+    const xBl = bE, xBr = WB - bC;                       // neutral base: [xBl, xBr]
+    const xEl = -xE, xCr = WB + xC;                      // outer depletion edges
+
+    // transport parameters (minority carriers in each region)
+    const muMinB = mobility(npn ? mat.mob.n : mat.mob.p, NB);
+    const muMinE = mobility(npn ? mat.mob.p : mat.mob.n, NE);
+    const muMinC = mobility(npn ? mat.mob.p : mat.mob.n, NC);
+    const tau = mat.tau;
+    const DB = Vt * muMinB, DE = Vt * muMinE, DC = Vt * muMinC;
+    const LB = Math.sqrt(DB * tau), LE = Math.sqrt(DE * tau), LC = Math.sqrt(DC * tau);
+
+    // boundary conditions (law of the junction)
+    const eE = Math.expm1(VE / Vt), eC = Math.expm1(VC / Vt);
+    const dB0 = minB0 * eE, dBW = minB0 * eC, dE0 = minE0 * eE, dC0 = minC0 * eC;
+    const r = W / LB, sh = Math.sinh(r), ch = Math.cosh(r);
+    const A = q * DB * minB0 / LB;
+    const JEn = A * (eE * ch / sh - eC / sh);
+    const JCn = A * (eE / sh - eC * ch / sh);
+    const JEp = q * DE * minE0 / LE * eE;
+    const JCp = q * DC * minC0 / LC * eC;
+    const JE = JEn + JEp, JC = JCn - JCp, JB = JE - JC;
+    const JrecB = JEn - JCn;                             // recombination in the neutral base
+    // injection from each side on its own (both are present in saturation)
+    const JinjE = eE > 0 ? A * eE * ch / sh : 0, JinjC = eC > 0 ? A * eC * ch / sh : 0;
+
+    // active-mode figures of merit at the present base width
+    const gamma = 1 / (1 + (DE * minE0 / LE) / (DB * minB0 / LB) * Math.tanh(r));
+    const alphaT = 1 / ch;
+    const alpha = gamma * alphaT;
+    const beta = alpha / (1 - alpha);
+    // inverse-active figures (collector acting as the emitter)
+    const gammaR = 1 / (1 + (DC * minC0 / LC) / (DB * minB0 / LB) * Math.tanh(r));
+    const alphaR = gammaR * alphaT;
+    const betaR = alphaR / (1 - alphaR);
+
+    // minority-carrier profiles
+    const dBase = (x) => { const u = Math.min(W, Math.max(0, x - xBl)); return (dB0 * Math.sinh((W - u) / LB) + dBW * Math.sinh(u / LB)) / sh; };
+    const dEm = (x) => dE0 * Math.exp(-Math.max(0, xEl - x) / LE);
+    const dCo = (x) => dC0 * Math.exp(-Math.max(0, x - xCr) / LC);
+
+    // window: fixed for these dopings, sized for the widest depletion regions on the slider
+    const r0 = bjtRange(state);
+    const xEmax = depletionWidth(Ks, NE, NB, VbiE - r0.veMin) * NB / (NE + NB);
+    const xCmax = depletionWidth(Ks, NB, NC, VbiC + r0.vrMax) * NB / (NB + NC);
+    const padE = Math.max(0.6 * WB, 2.2 * xEmax), padC = Math.max(0.45 * WB, 0.25 * xCmax);
+    const xMin = -(xEmax + padE), xMax = WB + xCmax + padC;
+
+    // electrostatics: piecewise-parabolic E_i through both depletion regions
+    const c = q / (2 * Ks * eps0);
+    const sgE = Math.sign(EiB - EiE) || 1, sgC = Math.sign(EiB - EiC) || 1;
+    function Ei(x) {
+      if (x <= xEl) return EiE;
+      if (x <= 0) return EiE + sgE * c * NE * (x - xEl) * (x - xEl);
+      if (x < xBl) return EiB - sgE * c * NB * (xBl - x) * (xBl - x);
+      if (x <= xBr) return EiB;
+      if (x <= WB) return EiB - sgC * c * NB * (x - xBr) * (x - xBr);
+      if (x < xCr) return EiC + sgC * c * NC * (xCr - x) * (xCr - x);
+      return EiC;
+    }
+    // dE_i/dx = q * field (electron energy), field in V/cm
+    function field(x) {
+      if (x <= xEl || x >= xCr || (x >= xBl && x <= xBr)) return 0;
+      if (x <= 0) return 2 * sgE * c * NE * (x - xEl);
+      if (x < xBl) return 2 * sgE * c * NB * (xBl - x);
+      if (x <= WB) return -2 * sgC * c * NB * (x - xBr);
+      return -2 * sgC * c * NC * (xCr - x);
+    }
+    const EmaxE = 2 * c * NE * xE, EmaxC = 2 * c * NC * xC;
+    const region = (x) => (x <= xEl ? 'E' : x < xBl ? 'EB' : x <= xBr ? 'B' : x < xCr ? 'CB' : 'C');
+
+    // base-minority and base-majority carrier quasi-Fermi levels
+    const fl = (Eiv, conc, minus) => Eiv + (minus ? -1 : 1) * Vt * Math.log(Math.max(conc, 1e-300) / n_i);
+    // Fm: quasi-Fermi level of the base-minority species (electrons in npn)
+    function Fm(x) {
+      if (x <= xBl) return FE;
+      if (x >= xBr) return FC;
+      // electrons: F = Ei + Vt ln(n/ni); holes: F = Ei - Vt ln(p/ni)
+      return fl(Ei(x), minB0 + dBase(x), !npn);
+    }
+    // FM: quasi-Fermi level of the other species (holes in npn)
+    function FM(x) {
+      if (x < xEl) return fl(Ei(x), minE0 + dEm(x), npn);
+      if (x > xCr) return fl(Ei(x), minC0 + dCo(x), npn);
+      return FB;
+    }
+    const FN = npn ? Fm : FM, FP = npn ? FM : Fm;
+    const Ec = (x) => Ei(x) + fr.cMinusI, Ev = (x) => Ei(x) - fr.iMinusV;
+    const nAt = (x) => n_i * Math.exp((FN(x) - Ei(x)) / Vt);
+    const pAt = (x) => n_i * Math.exp((Ei(x) - FP(x)) / Vt);
+
+    let opMode;
+    if (VE > 0 && VC <= 0) opMode = 'active';
+    else if (VE > 0 && VC > 0) opMode = 'saturation';
+    else if (VE <= 0 && VC <= 0) opMode = 'cutoff';
+    else opMode = 'inverse';
+    if (VE === 0 && VR === 0) opMode = 'equilibrium';
+
+    return {
+      mode: 'bjt', mat, T, kT: Vt, Vt, ni: n_i, fr, Ks, npn, s,
+      NE, NB, NC, WB, VE, VR, VC, majE, majB, majC, minE0, minB0, minC0,
+      FE, FB, FC, EiE, EiB, EiC, VbiE, VbiC, psiE, psiC, WEB, WCB, xE, bE, bC, xC, W, punch,
+      xBl, xBr, xEl, xCr, xMin, xMax,
+      muMinB, muMinE, muMinC, DB, DE, DC, LB, LE, LC, tau,
+      eE, eC, dB0, dBW, dE0, dC0, dBase, dEm, dCo,
+      JEn, JCn, JEp, JCp, JE, JC, JB, JrecB, JinjE, JinjC, gamma, alphaT, alpha, beta, gammaR, alphaR, betaR,
+      Ei, Ec, Ev, FN, FP, Fm, FM, field, EmaxE, EmaxC, region, nAt, pAt,
+      highInjection: Math.max(dB0, dBW) > 0.1 * majB,
+      degenerateE: (npn ? Ec(xMin) - FE : FE - Ev(xMin)) < 3 * Vt,
+      opMode, range: r0
+    };
+  }
+
+  /* Slider ranges for the two junction voltages */
+  function bjtRange(state) {
+    const mat = SV.MATERIALS[state.material];
+    const T = state.T, Vt = k * T, n_i = ni(mat, T), ni2 = n_i * n_i;
+    const npn = state.bjtType !== 'pnp';
+    const majE = npn ? carriers(state.NE, 0, n_i).n0 : carriers(0, state.NE, n_i).p0;
+    const majB = npn ? carriers(0, state.NB, n_i).p0 : carriers(state.NB, 0, n_i).n0;
+    const majC = npn ? carriers(state.NC, 0, n_i).n0 : carriers(0, state.NC, n_i).p0;
+    const VbiE = Vt * Math.log(majE * majB / ni2), VbiC = Vt * Math.log(majB * majC / ni2);
+    // stop short of V_bi, where the ideal (low-injection) model stops being meaningful
+    const veMax = Math.floor((VbiE - 0.12) * 20) / 20;
+    const vcFwd = Math.floor((Math.min(VbiC, veMax + 0.12) - 0.12) * 20) / 20;
+    return { veMin: -2, veMax, vrMin: -vcFwd, vrMax: 10, VbiE, VbiC };
+  }
+
+  /* J_C vs V_CE at fixed base current (common-emitter output characteristics) */
+  function bjtOutput(state, JBs, vceMax, n, veMax) {
+    const curves = [];
+    for (const JB of JBs) {
+      const pts = [];
+      for (let i = 0; i <= n; i++) {
+        const vce = vceMax * i / n;
+        let lo = -1, hi = veMax + 0.1;
+        for (let it = 0; it < 50; it++) {
+          const mid = (lo + hi) / 2;
+          const m = bjt({ ...state, VEB: mid, VCB: vce - mid });
+          if (m.JB > JB) hi = mid; else lo = mid;
+        }
+        const ve = (lo + hi) / 2;
+        const m = bjt({ ...state, VEB: ve, VCB: vce - ve });
+        pts.push({ V: vce, J: m.JC });
+      }
+      curves.push({ JB, pts });
+    }
+    return curves;
+  }
+
   /* J-V curve for the current doping, material and temperature */
   function ivCurve(state, vmin, vmax, n) {
     const dev = device(state);
@@ -379,7 +582,7 @@ SV.physics = (function () {
 
   return {
     Eg, ni, eiOffset, Nc, Nv, mobility, carriers, bandFrame,
-    bulk, junction, device, ivCurve, vaRangePN, depletionWidth, rg,
+    bulk, junction, device, ivCurve, vaRangePN, depletionWidth, rg, bjt, bjtRange, bjtOutput,
     VA_MIN_PN: -5,
     VA_RANGE_BULK: { min: -2, max: 2 }
   };
