@@ -149,21 +149,34 @@
     });
   }
 
-  const toLog = (N) => Math.log10(N);
-  const fromLog = (v) => Math.pow(10, parseFloat(v));
+  const NL = SV.niceLog;
+  const toIdx = (N) => NL.toIdx(N, 13);
+  const fromIdx = (v) => NL.fromIdx(parseFloat(v), 13);
   function setRangeFill(input) {
     const p = (input.value - input.min) / (input.max - input.min) * 100;
     input.style.setProperty('--p', p + '%');
   }
-  function concHTML(N) { return F.sciHTML(N, 1) + ' cm<sup>−3</sup>'; }
+
+  /* ---------- typed values ---------- */
+  const setBias = (v) => {
+    if (state.mode === 'pn') state.VA = v; else state.Vbulk = v;
+    update();
+  };
+  const typed = {
+    na: SV.sciInput($('na-in'), { min: 1e13, max: 1e19, onCommit: (v) => { state.NA = v; update(); } }),
+    nd: SV.sciInput($('nd-in'), { min: 1e13, max: 1e19, onCommit: (v) => { state.ND = v; update(); } }),
+    'bulk-n': SV.sciInput($('bulk-n-in'), { min: 1e13, max: 1e19, onCommit: (v) => { state.bulkN = v; update(); } }),
+    tau: SV.sciInput($('rg-tau-in'), { min: 1e-10, max: 1e-3, onCommit: (v) => { state.rgTau = v; update(); } }),
+    T: SV.numInput($('t-in'), { min: () => 200, max: () => 500, decimals: 0, onCommit: (v) => { state.T = Math.round(v); update(); } }),
+    va: SV.numInput($('va-in'), { min: () => vslider.min, max: () => vslider.max, decimals: 2, onCommit: (v) => setBias(Math.round(v * 1000) / 1000) }),
+    u: SV.numInput($('rg-u-in'), { min: () => -1, max: () => 1, decimals: 2, onCommit: (v) => { state.rgU = v; update(); } }),
+    et: SV.numInput($('rg-et-in'), { min: () => -Infinity, max: () => Infinity, decimals: 2, onCommit: (v) => { state.rgET = v; update(); } })
+  };
 
   /* ---------- slider ---------- */
   const vslider = new SV.VSlider($('vslider'), {
     min: -5, max: 1.4, value: 0,
-    onChange: (v) => {
-      if (state.mode === 'pn') state.VA = v; else state.Vbulk = v;
-      update();
-    }
+    onChange: setBias
   });
 
   /* ---------- diagram ---------- */
@@ -212,15 +225,15 @@
       ? '<i class="mi">N</i><sub>A</sub>' : '<i class="mi">N</i><sub>D</sub>';
     const bn = $('bulk-n');
     bn.style.setProperty('--fill', state.bulkType === 'p' ? 'var(--hole)' : 'var(--electron)');
-    for (const [id, out, N] of [['na', 'na-out', state.NA], ['nd', 'nd-out', state.ND], ['bulk-n', 'bulk-n-out', state.bulkN]]) {
+    for (const [id, N] of [['na', state.NA], ['nd', state.ND], ['bulk-n', state.bulkN]]) {
       const el = $(id);
-      if (document.activeElement !== el) el.value = toLog(N);
+      if (document.activeElement !== el) el.value = toIdx(N);
       setRangeFill(el);
-      $(out).innerHTML = concHTML(N);
+      typed[id].set(N);
     }
     $('temp').value = state.T;
     setRangeFill($('temp'));
-    $('t-out').textContent = state.T + ' K';
+    typed.T.set(state.T);
     document.querySelectorAll('[data-show]').forEach((c) => { c.checked = state.show[c.dataset.show]; });
     for (const id of ['toggle-quasi', 'toggle-flows']) {
       $(id).classList.toggle('disabled', !pn);
@@ -248,11 +261,13 @@
       `<span class="item"><span class="sw band"></span><span>${mh('E_c, E_v')}</span></span>`,
       `<span class="item"><span class="sw ei"></span><span>${mh('E_i')}</span></span>`
     ];
-    if (biased && state.show.quasi) {
-      items.push(`<span class="item"><span class="sw fn"></span><span>${mh('F_N')}</span></span>`);
-      items.push(`<span class="item"><span class="sw fp"></span><span>${mh('F_P')}</span></span>`);
-    } else {
-      items.push(`<span class="item"><span class="sw ef"></span><span>${mh('E_F')}</span></span>`);
+    // keep the same legend entries at every bias (dimming the unused ones) so
+    // the legend never rewraps and resizes the diagram as V_A crosses 0
+    const quasi = biased && state.show.quasi;
+    items.push(`<span class="item${quasi ? ' off' : ''}"><span class="sw ef"></span><span>${mh('E_F')}</span></span>`);
+    if (pn && state.show.quasi) {
+      items.push(`<span class="item${quasi ? '' : ' off'}"><span class="sw fn"></span><span>${mh('F_N')}</span></span>`);
+      items.push(`<span class="item${quasi ? '' : ' off'}"><span class="sw fp"></span><span>${mh('F_P')}</span></span>`);
     }
     items.push('<span class="item"><span class="dot"></span>electron</span>');
     items.push('<span class="item"><span class="ring"></span>hole</span>');
@@ -260,8 +275,8 @@
       items.push('<span class="item"><span class="sw diff"></span><span class="t-diff">diffusion</span></span>');
       items.push('<span class="item"><span class="sw drift"></span><span class="t-drift">drift</span></span>');
       if (state.show.carriers) items.push('<span class="item"><span class="trap-sq"></span><span class="t-rg">R–G event</span></span>');
-    } else if (model.V !== 0) {
-      items.push('<span class="item"><span class="sw drift"></span><span class="t-drift">drift</span></span>');
+    } else {
+      items.push(`<span class="item${model.V !== 0 ? '' : ' off'}"><span class="sw drift"></span><span class="t-drift">drift</span></span>`);
     }
     if (state.show.field) items.push(`<span class="item"><span style="color:var(--field)">${mh('ℰ')}</span><span>field</span></span>`);
     const note = pn ? 'Hover the diagram for values, or a carrier for its story. Energies are measured from the p contact.' : 'Hover the diagram for values, or a carrier for its story.';
@@ -442,8 +457,8 @@
   function renderBias() {
     const pn = model.mode === 'pn';
     const v = pn ? state.VA : state.Vbulk;
-    const sign = v > 0 ? '+' : v < 0 ? '−' : '';
-    $('va-readout').innerHTML = mh(pn ? 'V_A' : 'V') + ` = ${sign}${Math.abs(v).toFixed(2)}<span class="unit">V</span>`;
+    $('va-sym').innerHTML = mh(pn ? 'V_A' : 'V');
+    typed.va.set(v);
     let text;
     if (pn) {
       const m = model;
@@ -641,32 +656,33 @@
     $('bulk-n-name').innerHTML = state.bulkType === 'p' ? '<i class="mi">N</i><sub>A</sub>' : '<i class="mi">N</i><sub>D</sub>';
     $('bulk-n').style.setProperty('--fill', state.bulkType === 'p' ? 'var(--hole)' : 'var(--electron)');
     const bn = $('bulk-n');
-    if (document.activeElement !== bn) bn.value = toLog(state.bulkN);
+    if (document.activeElement !== bn) bn.value = toIdx(state.bulkN);
     setRangeFill(bn);
-    $('bulk-n-out').innerHTML = concHTML(state.bulkN);
-    $('temp').value = state.T; setRangeFill($('temp')); $('t-out').textContent = state.T + ' K';
+    typed['bulk-n'].set(state.bulkN);
+    $('temp').value = state.T; setRangeFill($('temp')); typed.T.set(state.T);
     document.querySelectorAll('[data-show]').forEach((c) => { c.checked = state.show[c.dataset.show]; });
 
     // carrier controls
     const u = $('rg-u');
     if (document.activeElement !== u) u.value = state.rgU;
     setRangeFill(u);
+    typed.u.set(state.rgU);
     $('rg-u-out').innerHTML = state.rgU > 0
       ? `${mh('Δn = Δp')} = ${F.sciHTML(model.delta, 1)}`
       : state.rgU < 0 ? `${mh('n, p')} × ${F.sciHTML(model.scale, 0)}` : `${mh('np = n_i^2')}`;
     const half = model.fr.Eg / 2;
     const et = $('rg-et');
-    et.min = (-half).toFixed(3); et.max = half.toFixed(3);
+    et.min = (-half).toFixed(2); et.max = half.toFixed(2);
     if (Math.abs(state.rgET) > half) state.rgET = Math.sign(state.rgET) * half;
     if (document.activeElement !== et) et.value = state.rgET;
     et.style.setProperty('--fill', 'var(--rgc)');
     setRangeFill(et);
-    $('rg-et-out').textContent = F.signed(state.rgET, 2) + ' eV';
+    typed.et.set(state.rgET);
     const tau = state.rgTau || mat.tau;
     const tr = $('rg-tau');
-    if (document.activeElement !== tr) tr.value = Math.log10(tau);
+    if (document.activeElement !== tr) tr.value = NL.toIdx(tau, -10);
     setRangeFill(tr);
-    $('rg-tau-out').innerHTML = fmtTime(tau);
+    typed.tau.set(tau);
 
     renderLegendRG();
     renderPropsRG();
@@ -955,9 +971,9 @@
   });
   radioKeys($('bulk-type'), '[data-type]');
 
-  $('na').addEventListener('input', (e) => { state.NA = fromLog(e.target.value); update(); });
-  $('nd').addEventListener('input', (e) => { state.ND = fromLog(e.target.value); update(); });
-  $('bulk-n').addEventListener('input', (e) => { state.bulkN = fromLog(e.target.value); update(); });
+  $('na').addEventListener('input', (e) => { state.NA = fromIdx(e.target.value); update(); });
+  $('nd').addEventListener('input', (e) => { state.ND = fromIdx(e.target.value); update(); });
+  $('bulk-n').addEventListener('input', (e) => { state.bulkN = fromIdx(e.target.value); update(); });
   $('temp').addEventListener('input', (e) => { state.T = parseFloat(e.target.value); update(); });
 
   document.querySelectorAll('[data-preset]').forEach((b) => b.addEventListener('click', () => {
@@ -991,7 +1007,7 @@
     state.rgU = v; update();
   });
   $('rg-et').addEventListener('input', (e) => { let v = parseFloat(e.target.value); if (Math.abs(v) < 0.012) v = 0; state.rgET = v; update(); });
-  $('rg-tau').addEventListener('input', (e) => { state.rgTau = Math.pow(10, parseFloat(e.target.value)); update(); });
+  $('rg-tau').addEventListener('input', (e) => { state.rgTau = NL.fromIdx(e.target.value, -10); update(); });
   document.querySelectorAll('[data-rgu]').forEach((b) => b.addEventListener('click', () => { state.rgU = parseFloat(b.dataset.rgu); update(); }));
 
   $('iv-scale').addEventListener('click', (e) => {

@@ -122,6 +122,8 @@ SV.Diagram = (function () {
   }
 
   const rand = Math.random;
+  /* background carriers live 8-18 s, starting at a random age so they fade out one at a time */
+  const lifespan = () => { const life = 8 + rand() * 10; return { life, age: rand() * life }; };
 
   class Diagram {
     constructor(canvas) {
@@ -213,6 +215,12 @@ SV.Diagram = (function () {
       return xs.filter((x) => x >= m.xMin && x <= m.xMax).sort((a, b) => a - b);
     }
 
+    /*
+     * Energy window for the plot. To keep the picture steady while a slider
+     * moves, each edge only moves when the bands get too close to it or
+     * leave too much empty space; it then jumps to a roomier position and
+     * eases there, instead of tracking every small change.
+     */
     targetView() {
       const m = this.model;
       let top = -Infinity, bot = Infinity;
@@ -221,7 +229,18 @@ SV.Diagram = (function () {
         bot = Math.min(bot, m.Ev(x));
       }
       const span = top - bot;
-      return { eTop: top + span * 0.17, eBot: bot - span * 0.17 };
+      const fresh = { eTop: top + span * 0.17, eBot: bot - span * 0.17 };
+      const t = this.viewTarget;
+      if (!t || this.viewKey !== m.mode) { this.viewKey = m.mode; this.viewTarget = fresh; return fresh; }
+      const ok = (room) => room > span * 0.08 && room < span * 0.5;
+      if (ok(t.eTop - top) && ok(bot - t.eBot)) return t;
+      // re-fit with extra room on any side that was running out
+      const next = {
+        eTop: ok(t.eTop - top) ? t.eTop : top + span * (t.eTop - top <= span * 0.08 ? 0.28 : 0.17),
+        eBot: ok(bot - t.eBot) ? t.eBot : bot - span * (bot - t.eBot <= span * 0.08 ? 0.28 : 0.17)
+      };
+      this.viewTarget = next;
+      return next;
     }
 
     /* ---------- per-frame ---------- */
@@ -230,7 +249,7 @@ SV.Diagram = (function () {
       const tv = this.targetView();
       if (!this.view) this.view = tv;
       else {
-        const k = 1 - Math.exp(-dt * 7);
+        const k = 1 - Math.exp(-dt * 4);
         const d1 = tv.eTop - this.view.eTop, d2 = tv.eBot - this.view.eBot;
         const span = tv.eTop - tv.eBot;
         if (Math.abs(d1) > span * 1e-4 || Math.abs(d2) > span * 1e-4) {
@@ -1079,12 +1098,19 @@ SV.Diagram = (function () {
       const [a, b] = side === 'p' ? [m.xMin, -m.xp] : [m.xn, m.xMax];
       return {
         sp, kind: 'bg', side, x: a + rand() * (b - a),
-        vx: (rand() - 0.5) * 0.12, off: 3 + rand() * 13, age: 1, alpha: 1, dying: false
+        vx: (rand() - 0.5) * 0.12, off: 3 + rand() * 13, alpha: 1, dying: false, ...lifespan()
       };
     }
 
     bulkParticle(sp) {
-      return { sp, kind: 'bulk', x: rand(), vx: (rand() - 0.5) * 0.1, off: 3 + rand() * 13, age: 1, alpha: 1 };
+      return { sp, kind: 'bulk', x: rand(), vx: (rand() - 0.5) * 0.1, off: 3 + rand() * 13, alpha: 1, dying: false, ...lifespan() };
+    }
+
+    /* replace a carrier that has faded out with a new one somewhere else, fading in */
+    recycle(p) {
+      const q = p.kind === 'bg' ? this.bgParticle(p.sp, p.side) : this.bulkParticle(p.sp);
+      q.alpha = 0; q.age = 0;
+      return q;
     }
 
     step(dt, geo) {
@@ -1097,6 +1123,12 @@ SV.Diagram = (function () {
       const vmag = 0.14 * Math.abs(m.V);
       const dirE = m.V > 0 ? 1 : -1;                        // electrons move toward the + contact
       const muRatio = Math.max(0.15, Math.min(1, m.muP / m.muN));
+      this.particles = this.particles.map((p) => {
+        p.age += dt;
+        if (p.age > p.life) p.dying = true;
+        if (p.dying) p.alpha -= dt * 1.5; else p.alpha = Math.min(1, p.alpha + dt * 1.5);
+        return p.alpha <= 0 ? this.recycle(p) : p;
+      });
       for (const p of this.particles) {
         p.vx += (rand() - 0.5) * 0.6 * dt;
         p.vx = Math.max(-0.07, Math.min(0.07, p.vx));
@@ -1141,6 +1173,7 @@ SV.Diagram = (function () {
           if (p.x < a || p.x > b) p.x = a + rand() * Math.max(0, b - a);
           p.off += (rand() - 0.5) * 8 * dt;
           p.off = Math.max(2, Math.min(17, p.off));
+          if (p.age > p.life) p.dying = true;
         } else if (p.kind === 'try') {
           const e = p.sp === 'e';
           const sgn = e ? -1 : 1;                              // electrons head -x, holes +x
@@ -1164,7 +1197,9 @@ SV.Diagram = (function () {
             const k = 1 - Math.exp(-dt * 2.2);
             p.E += (edge - p.E) * k;
             p.travel += p.v * dt;
-            if (p.travel > p.reach && !p.dying) {
+            // recombine once it has gone far enough, or has nearly stopped,
+            // so injected carriers never pile up beside the junction
+            if ((p.travel > p.reach || p.v < 0.04 || p.age > 5) && !p.dying) {
               p.dying = true;
               this.events.push({ type: 'rec', x: p.x, t: 0 });
             }
@@ -1180,8 +1215,10 @@ SV.Diagram = (function () {
           p.off += (rand() - 0.5) * 6 * dt;
           p.off = Math.max(2, Math.min(10, p.off));
         }
-        if (p.dying) { p.alpha -= dt * 2.2; } else { p.alpha = Math.min(1, p.alpha + dt * 4); }
+        if (p.kind !== 'bg' && p.age > 7) p.dying = true;   // nothing lingers
+        if (p.dying) { p.alpha -= dt * (p.kind === 'bg' ? 1.5 : 2.2); } else { p.alpha = Math.min(1, p.alpha + dt * (p.kind === 'bg' ? 1.5 : 4)); }
         if (p.alpha > 0 && p.x >= m.xMin && p.x <= m.xMax) alive.push(p);
+        else if (p.kind === 'bg') alive.push(this.recycle(p));
       }
       this.particles = alive;
       for (const ev of this.events) ev.t += dt / 1.0;

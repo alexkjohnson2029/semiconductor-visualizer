@@ -519,3 +519,69 @@ body[data-mode="rg"] .figure { height: clamp(560px, calc(100vh - var(--header) -
   .mode-switch .lg { display: none; }
   .mode-switch .sm { display: inline; }
 }
+
+/* ---------- typed values ---------- */
+.num {
+  font: inherit; font-weight: 500; color: var(--text);
+  background: rgba(3, 5, 11, 0.6);
+  border: 1px solid var(--line); border-radius: 6px;
+  padding: 1px 4px; text-align: right;
+  -moz-appearance: textfield; appearance: textfield;
+  transition: border-color 0.15s, background-color 0.15s;
+}
+.num::-webkit-outer-spin-button, .num::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.num:hover { border-color: var(--line-strong); }
+.num:focus { outline: none; border-color: var(--ef); background: rgba(255, 200, 87, 0.06); }
+.sci-in, .num-in { display: inline-flex; align-items: baseline; gap: 3px; font-size: 14px; white-space: nowrap; }
+.sci-in .mant { width: 3.4em; }
+.sci-in .exp { width: 2.4em; font-size: 0.78em; text-align: center; transform: translateY(-0.45em); padding: 0 2px; }
+.sci-in .x { color: var(--dim); }
+.sci-in .u, .num-in .u { color: var(--dim); font-size: 12.5px; margin-left: 2px; }
+.num-in .num { width: 4.4em; }
+.range-sub { display: block; font-size: 12.5px; color: var(--dim); margin: -2px 0 2px; min-height: 1.5em; }
+
+.va-readout { display: flex; align-items: baseline; gap: 6px; white-space: nowrap; }
+.va-in { font-size: 28px; font-weight: 600; letter-spacing: -0.02em; width: 3.9em; padding: 0 6px; line-height: 1.1; }
+.va-readout .unit { margin-left: 0; }
+
+/* the bias description sits below the slider, so its changing length
+   never moves the slider while it is being dragged */
+@media (min-width: 1181px), (max-width: 820px) {
+  .bias-head { display: contents; }
+  .bias-state { order: 1; margin: 0; flex: none; }
+  .bias .iv, .bias .currents { order: 2; }
+}
+@media (max-width: 820px) {
+  .bias .iv, .bias .currents, .bias h2, .va-readout, .bias-state { grid-column: 1; }
+}
+@media (min-width: 821px) and (max-width: 1180px) { .bias-state { min-height: 7.4em; } }
+
+/* legend entries that don't apply right now stay in place, dimmed */
+.legend .item.off { opacity: 0.3; }
+
+/* ---------- header: mode switch + About ---------- */
+.top-right { display: flex; align-items: center; gap: 14px; }
+.about-link { color: var(--dim); text-decoration: none; font-size: 14px; font-weight: 500; padding: 6px 4px; white-space: nowrap; }
+.about-link:hover { color: var(--text); }
+
+/* ---------- About ---------- */
+html { scroll-behavior: smooth; }
+.about { border-top: 1px solid var(--line); padding: 44px 22px 40px; scroll-margin-top: var(--header); }
+.about-inner { max-width: 68ch; margin: 0 auto; }
+.about h2 { font-size: 22px; color: var(--text); font-weight: 700; letter-spacing: -0.01em; margin-bottom: 14px; }
+.about p { margin: 0 0 14px; color: #c3cadc; font-size: 15.5px; line-height: 1.65; }
+.about-cta {
+  display: inline-flex; align-items: center; gap: 10px; margin-top: 6px;
+  padding: 9px 16px; border-radius: 10px;
+  border: 1px solid var(--line-strong); color: var(--text); text-decoration: none; font-weight: 600; font-size: 14px;
+  background: rgba(243, 246, 255, 0.05);
+  transition: background-color 0.15s, border-color 0.15s, box-shadow 0.15s;
+}
+.about-cta svg { width: 18px; height: 18px; }
+.about-cta:hover { background: rgba(243, 246, 255, 0.1); border-color: var(--band); box-shadow: 0 0 18px -4px rgba(170, 196, 255, 0.6); }
+
+@media (max-width: 820px) {
+  .top-right { gap: 8px; }
+  .about { padding: 32px 16px; }
+}
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }

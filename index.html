@@ -29,10 +29,13 @@
 
     <div class="mat-card" id="mat-card" role="tooltip" hidden></div>
 
-    <div class="segmented mode-switch" role="radiogroup" aria-label="Structure" id="mode">
-      <button type="button" role="radio" data-mode="bulk"><span class="lg">Single material</span><span class="sm">Single</span></button>
-      <button type="button" role="radio" data-mode="pn">pn junction</button>
-      <button type="button" role="radio" data-mode="rg"><span class="lg">R–G processes</span><span class="sm">R–G</span></button>
+    <div class="top-right">
+      <div class="segmented mode-switch" role="radiogroup" aria-label="Structure" id="mode">
+        <button type="button" role="radio" data-mode="bulk"><span class="lg">Single material</span><span class="sm">Single</span></button>
+        <button type="button" role="radio" data-mode="pn">pn junction</button>
+        <button type="button" role="radio" data-mode="rg"><span class="lg">R–G processes</span><span class="sm">R–G</span></button>
+      </div>
+      <a class="about-link" href="#about">About</a>
     </div>
   </header>
 
@@ -46,23 +49,23 @@
           <button type="button" role="radio" data-type="i">Intrinsic</button>
           <button type="button" role="radio" data-type="p">p-type</button>
         </div>
-        <label class="range-field" id="bulk-n-field">
-          <span class="range-head"><span class="range-name" id="bulk-n-name"></span><output id="bulk-n-out"></output></span>
-          <input type="range" id="bulk-n" min="13" max="19" step="0.01">
+        <div class="range-field" id="bulk-n-field">
+          <span class="range-head"><span class="range-name" id="bulk-n-name"></span><span class="sci-in" id="bulk-n-in"><input type="number" class="num mant" step="0.1" min="1" max="9.9" inputmode="decimal" aria-label="Doping mantissa"><span class="x">×&thinsp;10</span><input type="number" class="num exp" step="1" inputmode="numeric" aria-label="Doping power of ten"><span class="u">cm<sup>−3</sup></span></span></span>
+          <input type="range" id="bulk-n" min="0" max="60" step="1" aria-label="Doping">
           <span class="range-scale"><span>10<sup>13</sup></span><span>10<sup>19</sup> cm<sup>−3</sup></span></span>
-        </label>
+        </div>
         </div>
 
         <div id="doping-pn">
-        <label class="range-field side-p">
-          <span class="range-head"><span class="range-name"><i class="mi">N</i><sub>A</sub> <span class="hint">p side</span></span><output id="na-out"></output></span>
-          <input type="range" id="na" min="13" max="19" step="0.01">
-        </label>
-        <label class="range-field side-n">
-          <span class="range-head"><span class="range-name"><i class="mi">N</i><sub>D</sub> <span class="hint">n side</span></span><output id="nd-out"></output></span>
-          <input type="range" id="nd" min="13" max="19" step="0.01">
+        <div class="range-field side-p">
+          <span class="range-head"><span class="range-name"><i class="mi">N</i><sub>A</sub> <span class="hint">p side</span></span><span class="sci-in" id="na-in"><input type="number" class="num mant" step="0.1" min="1" max="9.9" inputmode="decimal" aria-label="N A mantissa"><span class="x">×&thinsp;10</span><input type="number" class="num exp" step="1" inputmode="numeric" aria-label="N A power of ten"><span class="u">cm<sup>−3</sup></span></span></span>
+          <input type="range" id="na" min="0" max="60" step="1" aria-label="N A">
+        </div>
+        <div class="range-field side-n">
+          <span class="range-head"><span class="range-name"><i class="mi">N</i><sub>D</sub> <span class="hint">n side</span></span><span class="sci-in" id="nd-in"><input type="number" class="num mant" step="0.1" min="1" max="9.9" inputmode="decimal" aria-label="N D mantissa"><span class="x">×&thinsp;10</span><input type="number" class="num exp" step="1" inputmode="numeric" aria-label="N D power of ten"><span class="u">cm<sup>−3</sup></span></span></span>
+          <input type="range" id="nd" min="0" max="60" step="1" aria-label="N D">
           <span class="range-scale"><span>10<sup>13</sup></span><span>10<sup>19</sup> cm<sup>−3</sup></span></span>
-        </label>
+        </div>
         <div class="presets" aria-label="Doping presets">
           <button type="button" data-preset="sym">Symmetric</button>
           <button type="button" data-preset="p+n">p<sup>+</sup>n</button>
@@ -73,34 +76,35 @@
 
       <section class="group" id="rg-controls" hidden>
         <h2>Carriers</h2>
-        <label class="range-field">
-          <span class="range-head"><span class="range-name">State</span><output id="rg-u-out"></output></span>
-          <input type="range" id="rg-u" min="-1" max="1" step="0.01">
+        <div class="range-field">
+          <span class="range-head"><span class="range-name">State</span><span class="num-in"><input type="number" class="num" id="rg-u-in" min="-1" max="1" step="0.05" inputmode="decimal" aria-label="Carrier state, from minus 1 (removed) to 1 (injected)"></span></span>
+          <output class="range-sub" id="rg-u-out"></output>
+          <input type="range" id="rg-u" min="-1" max="1" step="0.02">
           <span class="range-scale"><span>removed</span><span>equilibrium</span><span>injected</span></span>
-        </label>
+        </div>
         <div class="presets rg-presets" aria-label="Carrier presets">
           <button type="button" data-rgu="-1">Depletion region</button>
           <button type="button" data-rgu="0">Equilibrium</button>
           <button type="button" data-rgu="0.55">Light on</button>
         </div>
-        <label class="range-field trap">
-          <span class="range-head"><span class="range-name"><i class="mi">E</i><sub>T</sub> − <i class="mi">E</i><sub>i</sub> <span class="hint">R–G center level</span></span><output id="rg-et-out"></output></span>
-          <input type="range" id="rg-et" min="-0.5" max="0.5" step="0.005">
-        </label>
-        <label class="range-field">
-          <span class="range-head"><span class="range-name"><i class="mi">τ</i><sub>n</sub> = <i class="mi">τ</i><sub>p</sub> <span class="hint">R–G center lifetime</span></span><output id="rg-tau-out"></output></span>
-          <input type="range" id="rg-tau" min="-10" max="-3" step="0.05">
+        <div class="range-field trap">
+          <span class="range-head"><span class="range-name"><i class="mi">E</i><sub>T</sub> − <i class="mi">E</i><sub>i</sub> <span class="hint">R–G center level</span></span><span class="num-in"><input type="number" class="num" id="rg-et-in" step="0.01" inputmode="decimal" aria-label="E T minus E i in eV"><span class="u">eV</span></span></span>
+          <input type="range" id="rg-et" min="-0.5" max="0.5" step="0.01">
+        </div>
+        <div class="range-field">
+          <span class="range-head"><span class="range-name"><i class="mi">τ</i><sub>n</sub> = <i class="mi">τ</i><sub>p</sub> <span class="hint">R–G center lifetime</span></span><span class="sci-in" id="rg-tau-in"><input type="number" class="num mant" step="0.1" min="1" max="9.9" inputmode="decimal" aria-label="Lifetime mantissa"><span class="x">×&thinsp;10</span><input type="number" class="num exp" step="1" inputmode="numeric" aria-label="Lifetime power of ten"><span class="u">s</span></span></span>
+          <input type="range" id="rg-tau" min="0" max="70" step="1" aria-label="Lifetime">
           <span class="range-scale"><span>0.1 ns</span><span>1 ms</span></span>
-        </label>
+        </div>
       </section>
 
       <section class="group">
         <h2>Temperature</h2>
-        <label class="range-field">
-          <span class="range-head"><span class="range-name"><i class="mi">T</i></span><output id="t-out"></output></span>
+        <div class="range-field">
+          <span class="range-head"><span class="range-name"><i class="mi">T</i></span><span class="num-in"><input type="number" class="num" id="t-in" min="200" max="500" step="1" inputmode="numeric" aria-label="Temperature in kelvin"><span class="u">K</span></span></span>
           <input type="range" id="temp" min="200" max="500" step="5">
           <span class="range-scale"><span>200 K</span><span>500 K</span></span>
-        </label>
+        </div>
       </section>
 
       <section class="group">
@@ -137,7 +141,7 @@
       <div class="bias-ui" id="bias-ui">
       <div class="bias-head">
         <h2>Applied voltage</h2>
-        <div class="va-readout" id="va-readout"></div>
+        <div class="va-readout"><span id="va-sym"></span> = <input type="number" class="num va-in" id="va-in" step="0.01" inputmode="decimal" aria-label="Applied voltage in volts"><span class="unit">V</span></div>
         <p class="bias-state" id="bias-state"></p>
       </div>
       <div class="vslider" id="vslider">
@@ -183,6 +187,25 @@
     </aside>
   </main>
 
+  <section class="about" id="about" aria-labelledby="about-title">
+    <div class="about-inner">
+      <h2 id="about-title">About</h2>
+      <p>
+        I'm an aspiring electrical engineer with a growing interest in semiconductor technologies. I'm currently
+        taking Microelectronic Technologies, and I'm especially interested in semiconductor physics: how doping,
+        temperature and applied voltage reshape the energy bands, and how that turns into the behavior of real devices.
+      </p>
+      <p>
+        I built Band Lab to make those ideas something you can play with instead of only read about. Pick a material,
+        change the doping, form a pn junction and bias it, and watch the bands, fields and currents respond.
+      </p>
+      <a class="about-cta" href="https://www.linkedin.com/in/alex-kim-johnson/" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.98 3.5a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5zM3 9.5h4V21H3zM9.5 9.5h3.8v1.6h.1c.5-1 1.8-2 3.8-2 4 0 4.8 2.6 4.8 6V21h-4v-5.2c0-1.2 0-2.8-1.7-2.8s-2 1.3-2 2.7V21h-4z" fill="currentColor"/></svg>
+        Connect on LinkedIn
+      </a>
+    </div>
+  </section>
+
   <footer class="footnote">
     <p>
       Models: nondegenerate statistics, complete ionization, abrupt (step) junction with the depletion approximation,
@@ -198,6 +221,7 @@
   <script src="js/format.js"></script>
   <script src="js/diagram.js"></script>
   <script src="js/vslider.js"></script>
+  <script src="js/numinput.js"></script>
   <script src="js/rg.js"></script>
   <script src="js/app.js"></script>
 </body>
