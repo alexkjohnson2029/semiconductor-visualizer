@@ -1,4 +1,4 @@
-# Semiconductor Band Diagram Visualizer
+# Fermi's Sandbox
 
 **Live site:** [alexkjohnson2029.github.io/semiconductor-visualizer](https://alexkjohnson2029.github.io/semiconductor-visualizer/)
 
